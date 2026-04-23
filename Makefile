@@ -3,7 +3,7 @@
 SHELL := /bin/sh
 .DEFAULT_GOAL := help
 
-.PHONY: help install dev stop agent ngrok agent-card check lint format typecheck test test-fast integration clean
+.PHONY: help install dev stop agent mcp ngrok agent-card mcp-initialize check lint format typecheck test test-fast integration clean
 
 help: ## Show this help
 	@awk 'BEGIN {FS = ":.*##"; printf "\nUsage:\n  make \033[36m<target>\033[0m\n\nTargets:\n"} /^[a-zA-Z_-]+:.*?##/ { printf "  \033[36m%-15s\033[0m %s\n", $$1, $$2 }' $(MAKEFILE_LIST)
@@ -20,11 +20,21 @@ stop: ## Stop local dev stack
 agent: ## Run the A2A agent locally on :8001 (reads .env)
 	uv run --package a2a_agent uvicorn a2a_agent.app:a2a_app --host 0.0.0.0 --port 8001 --log-level info --reload --env-file .env
 
+mcp: ## Run the MCP server locally on :8000 (reads .env)
+	uv run --package mcp_server uvicorn mcp_server.main:app --host 0.0.0.0 --port 8000 --log-level info --reload --env-file .env
+
 ngrok: ## Expose local :8001 via ngrok (requires NGROK_AUTHTOKEN in .env on first run)
 	ngrok http 8001
 
 agent-card: ## Fetch the local agent card (agent must be running via `make agent`)
 	curl -s http://localhost:8001/.well-known/agent-card.json | python -m json.tool
+
+mcp-initialize: ## Send the MCP initialize handshake to localhost:8000 (server must be running via `make mcp`)
+	curl -s -X POST http://localhost:8000/mcp \
+		-H 'Accept: application/json, text/event-stream' \
+		-H 'Content-Type: application/json' \
+		-d '{"jsonrpc":"2.0","id":1,"method":"initialize","params":{"protocolVersion":"2025-06-18","capabilities":{},"clientInfo":{"name":"curl","version":"1.0"}}}'
+	@echo
 
 check: lint typecheck test-fast ## Lint + typecheck + fast tests
 

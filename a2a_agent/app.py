@@ -23,6 +23,7 @@ from __future__ import annotations
 import os
 
 from a2a.types import AgentSkill
+from shared.fhir_scopes import FHIR_SCOPES
 
 from a2a_agent.agent import root_agent
 from a2a_agent.po_base.app_factory import create_a2a_app
@@ -47,19 +48,10 @@ a2a_app = create_a2a_app(
     url=_AGENT_URL,
     port=8001,
     fhir_extension_uri=f"{_PO_BASE}/schemas/a2a/v1/fhir-context",
-    # SMART-on-FHIR scopes we will need for Week 2 MCP tools. Advertised now
-    # so PO's registration UI shows the correct scope list and we do not have
-    # to re-register after adding tools. All are read-only ('.rs' = read/search).
-    fhir_scopes=[
-        {"name": "patient/Patient.rs", "required": True},
-        {"name": "patient/Condition.rs", "required": True},
-        {"name": "patient/MedicationRequest.rs", "required": True},
-        {"name": "patient/Observation.rs", "required": True},
-        {"name": "patient/ServiceRequest.rs", "required": True},
-        {"name": "patient/Coverage.rs", "required": True},
-        {"name": "patient/Procedure.rs", "required": False},
-        {"name": "patient/DocumentReference.rs", "required": False},
-    ],
+    # Imported from shared/ — same tuple is advertised by the MCP server's
+    # capability extension. PO workspace filters to the intersection of the
+    # two lists, so keeping them in sync via import is load-bearing.
+    fhir_scopes=list(FHIR_SCOPES),
     skills=[
         AgentSkill(
             id="prior-auth-lumbar-mri",

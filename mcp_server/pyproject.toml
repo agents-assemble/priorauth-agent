@@ -1,14 +1,38 @@
 [project]
 name = "mcp_server"
 version = "0.0.1"
-description = "FastMCP server exposing 3 prior-auth tools (forked from PO community MCP)."
+description = "FastMCP server exposing 3 prior-auth tools (scaffolded from PO community MCP python reference)."
 requires-python = ">=3.11"
 dependencies = [
+    # Shared Pydantic contracts (repo-root workspace member, not PyPI)
     "shared",
-    "pydantic>=2.7,<3",
-    "httpx>=0.27",
+
+    # MCP framework. FastMCP ships inside the `mcp` package. Upstream
+    # po-community-mcp/python pins mcp>=1.9.0; we match to keep the
+    # capability-extension monkeypatch in server.py on a known surface.
+    "mcp>=1.9.0",
+
+    # ASGI host + streamable-http mount for the MCP session manager.
+    "fastapi>=0.115.0",
+    "uvicorn>=0.32.0",
+
+    # FHIR + PO transport. PO propagates the SHARP access token as a JWT in
+    # `x-fhir-access-token`; we optionally decode it (without verifying the
+    # signature — the FHIR server does that on the next hop) to pull the
+    # `patient` claim when no explicit x-patient-id header is sent.
+    "httpx>=0.28",
+    "PyJWT>=2.10",
+
+    # Local dev env loading. Mirrors a2a_agent/__init__.py top-level
+    # load_dotenv() call; same rationale (pre-submodule-import).
     "python-dotenv>=1.0",
+
+    # LLM client used inside match_payer_criteria + generate_pa_letter (Week 2).
+    # Kept declared now so `uv sync --all-packages` pre-installs it.
     "google-generativeai>=0.7",
+
+    # Explicit even though pydantic ships as transitive — match a2a_agent.
+    "pydantic>=2.7,<3",
 ]
 
 [build-system]
