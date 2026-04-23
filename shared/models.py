@@ -9,10 +9,9 @@ Any change here must be reviewed by BOTH humans per CODEOWNERS.
 
 from __future__ import annotations
 
-from enum import Enum
+from enum import StrEnum
 
 from pydantic import BaseModel, Field
-
 
 # ---------------------------------------------------------------------------
 # Demographics + clinical primitives
@@ -96,7 +95,7 @@ class PatientContext(BaseModel):
     Produced by the MCP tool `fetch_patient_context`. Consumed by
     `match_payer_criteria` and `generate_pa_letter`.
 
-    This is intentionally compact (~2–3 KB) so sub-agents reason over clean
+    This is intentionally compact (~2-3 KB) so sub-agents reason over clean
     structured input rather than raw FHIR bundles.
     """
 
@@ -118,7 +117,7 @@ class PatientContext(BaseModel):
 # ---------------------------------------------------------------------------
 
 
-class Decision(str, Enum):
+class Decision(StrEnum):
     APPROVE = "approve"
     NEEDS_INFO = "needs_info"
     DENY = "deny"
@@ -127,7 +126,9 @@ class Decision(str, Enum):
 class CriterionCheck(BaseModel):
     """A single payer criterion with its evaluation result."""
 
-    id: str = Field(description="Stable identifier, e.g. 'cigna.lumbar_mri.conservative_therapy_6wk'")
+    id: str = Field(
+        description="Stable identifier, e.g. 'cigna.lumbar_mri.conservative_therapy_6wk'",
+    )
     description: str
     met: bool
     evidence: str = Field(description="How it was (or wasn't) supported by PatientContext")
@@ -186,7 +187,9 @@ class PALetter(BaseModel):
     rendered_markdown: str = Field(description="Markdown version for fallback display.")
     needs_info_checklist: list[str] = Field(
         default_factory=list,
-        description="Populated when decision == NEEDS_INFO. Each item is one missing piece of evidence.",
+        description=(
+            "Populated when decision == NEEDS_INFO. Each item is one missing piece of evidence."
+        ),
     )
     urgent_banner: str | None = Field(
         default=None,
