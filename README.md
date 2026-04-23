@@ -36,7 +36,7 @@ See `[docs/PLAN.md](docs/PLAN.md)` for full strategic context, `[docs/ARCHITECTU
 ## Team
 
 - **Person A (MCP lead)**: Kevin Shine George ([@kevinsgeo](https://github.com/kevinsgeo))
-- **Person B (A2A lead)**: Sanjit Saji
+- **Person B (A2A lead)**: Sanjit Saji ([@Sanjit2004](https://github.com/Sanjit2004))
 
 Conventions for the agents live in `[AGENTS.md](AGENTS.md)`. Daily status in `[STATUS.md](STATUS.md)`.
 

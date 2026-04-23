@@ -9,7 +9,7 @@ Both AI coding agents working on this repo read this file on every session. Foll
 - **Goal**: Submit a Prior Authorization A2A agent for lumbar MRI (CPT 72148) via "Option 3" (custom external A2A agent), using FHIR + MCP + A2A.
 - **Humans**:
   - **Person A (MCP lead)**: Kevin Shine George (`@kevinsgeo`)
-  - **Person B (A2A lead)**: Sanjit Saji
+  - **Person B (A2A lead)**: Sanjit Saji (`@Sanjit2004`)
 - **Shared model**: both humans use Cursor with Claude Opus 4.7 for style consistency.
 
 ## Session-start protocol (do this before any task)
