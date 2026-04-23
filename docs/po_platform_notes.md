@@ -8,6 +8,37 @@ Newest entries at the top. Link to specific PO docs / support threads / Discord 
 
 ---
 
+## 2026-04-23 — Payer policy WAFs block automated extraction; manual-verification-pass workflow
+
+**Context**: Payer-criteria research for PR #6 (`docs/payer_criteria_research.md`). Needed to extract the lumbar MRI medical-necessity policy text from Cigna (via eviCore) and Aetna (CPB 0236) for paraphrase + citation.
+
+**Observation**: Two distinct extraction failure modes hit during one research session:
+
+1. **Aetna Incapsula bot-challenge**. Direct fetch of `https://www.aetna.com/cpb/medical/data/200_299/0236.html` returned a JavaScript-challenge HTML page (incident ID `1345000620024825391-18399296386830212`) instead of policy content. Aetna runs Imperva Incapsula on `www.aetna.com`; any non-browser User-Agent (or even a real browser's first request without prior session cookies) trips the challenge. Worked around by falling back to `https://es.aetna.com/cpb/medical/data/200_299/0236.html` — Aetna's Spanish-portal mirror that hosts the **English-language CPBs verbatim** for Spanish-speaking US members. The mirror is not behind Incapsula and served identical policy text.
+2. **eviCore PDF size cap**. The Cigna lumbar MRI policy is delegated to eviCore's spine-imaging guideline V1.0.2026 (`evicore.com/.../pdfs/.../spine_imaging_v1_0_2026.pdf`). First fetch hit our tool's 200 KB text-extraction cap (extracted text was ~205 KB); had to re-fetch with a higher token limit to capture the conservative-therapy + red-flag sections at the end of the document.
+
+**Why it matters**: Payer-criteria source citations need to be the **canonical** URL the policy is published at, not a mirror or a cached PDF. Citing `es.aetna.com` in `aetna_lumbar_mri.json::source_policy_url` would look like sloppy research to a clinician reviewer (and to a judge), even though the content is identical. So we landed a **manual-verification-pass workflow**:
+
+1. Original automated extraction uses whatever source works (mirror, PDF, cache) and logs the discrepancy in a "Source integrity notes" section of the research doc.
+2. Before any criteria JSON encodes a `source_policy_url`, a human re-fetches the canonical URL from a normal browser session, runs spot-checks on the extracted thresholds + structural phrasing + red-flag taxonomy + ICD code lists against the live page, and appends a verification log to the research doc with results + decision.
+3. Verification log format is a markdown table with columns `# | Expected | Observed | Result`. PR #6 has the worked example (`docs/payer_criteria_research.md` → `## Aetna canonical-URL verification log`).
+4. Discrepancies surfaced by the verification pass are corrected in the doc **before** the JSON encoding PR is opened, not after.
+
+**Concrete payoff from running the pattern once**: PR #6's verification pass caught a real misattribution in Aetna §5 — the original automated extraction had attributed the BoneMRI experimental subsection's Z-code exclusions (`Z01.818`, `Z01.89`, `Z08`, `Z12.x`, `Z85.x`) to the main CPB 0236 lumbar MRI policy. They are scoped only to BoneMRI on the live page. Had this propagated into `aetna_lumbar_mri.json`, the rule engine would have over-rejected legitimate cases where a covered lumbar MRI happens to carry a personal-cancer-history Z-code alongside a covered lumbar diagnosis (e.g., `Z85.3` + `M54.16` + 6wk conservative therapy is a *covered* MRI under CPB 0236). Caught at doc-review cost; would have been caught at golden-file-test cost otherwise — order-of-magnitude more expensive.
+
+**Explanation / workaround**:
+
+- For each new payer added to the criteria set (v2 candidates: UnitedHealth, Anthem, Humana, BCBS regionals), assume the canonical policy URL is behind a WAF and budget the manual verification pass into the research timeline. Roughly: 30 min automated extraction → 15 min manual verification pass → 0–30 min discrepancy correction depending on what's caught.
+- Mirror discovery trick that worked once for Aetna: try the Spanish-language portal subdomain (`es.<payer>.com`). Many US payers host English CPBs there for Spanish-speaking-member entry, often without WAF rules.
+- For PDF-delivered policies (eviCore, AIM, NIA, etc.): always re-fetch with a generous text-extraction limit on the first pass; conservative-therapy duration + red-flag sections tend to live at the document's end and silently truncate.
+- Never cite a mirror URL or a PDF-cache URL as the JSON's `source_policy_url`. The canonical URL must verify successfully (or the entry doesn't ship until it does).
+
+**Impact**: Workflow documented here. PR #6 provides the worked example. Risk Register entry "Payer criteria accuracy + IP" extended in `docs/PLAN.md` to reference this workflow as the mitigation.
+
+**Source**: PR #6 review (`@Sanjit2004` non-blocking note #2 explicitly requested the canonical-URL verification before encoding); Aetna live page verified 2026-04-23 from a non-bot-blocked browser session.
+
+---
+
 ## 2026-04-23 — SHARP JWT trust model: we don't verify, FHIR server does
 
 **Context**: Writing `get_patient_id_if_context_exists` in `mcp_server/fhir/context.py` and deciding how to extract the `patient` claim from the `x-fhir-access-token` header.
