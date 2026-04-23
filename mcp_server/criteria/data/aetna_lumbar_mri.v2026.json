@@ -1,0 +1,196 @@
+{
+  "schema_version": "v1",
+  "payer_id": "aetna",
+  "payer_name": "Aetna",
+  "policy_title": "Magnetic Resonance Imaging (MRI) and Computed Tomography (CT) of the Spine — Aetna Clinical Policy Bulletin 0236",
+  "policy_version": "CPB 0236 (unknown; references through 2025 and \"Accessed February 6, 2026\")",
+  "policy_effective_date": null,
+  "source_policy_url": "https://www.aetna.com/cpb/medical/data/200_299/0236.html",
+  "last_verified": "2026-04-23",
+
+  "service": {
+    "cpt_codes": ["72148"],
+    "description": "MRI lumbar spine without IV contrast. CPB 0236 uses an \"any of the following\" medical-necessity list: two bullets are time-thresholded (radiculopathy 6 weeks, spondylolisthesis/DDD 4 weeks); the remaining bullets function as red-flag bypasses."
+  },
+
+  "red_flags": [
+    {
+      "id": "aetna.redflag.cauda_equina_or_cord_compression",
+      "label": "Clinical suspicion of spinal cord or cauda equina compression syndrome",
+      "canonical_labels": ["cauda_equina_syndrome", "spinal_cord_compression", "saddle_anesthesia", "bowel_bladder_dysfunction"],
+      "description": "Clinical suspicion of spinal cord or cauda equina compression syndrome.",
+      "source_section": "CPB 0236 medical-necessity list (bullet: cord/cauda equina compression)"
+    },
+    {
+      "id": "aetna.redflag.spinal_stenosis",
+      "label": "Clinical evidence of spinal stenosis",
+      "canonical_labels": ["spinal_stenosis", "neurogenic_claudication"],
+      "description": "Clinical evidence of spinal stenosis (e.g., neurogenic claudication, bilateral leg pain with walking relieved by sitting).",
+      "source_section": "CPB 0236 medical-necessity list (bullet: spinal stenosis)"
+    },
+    {
+      "id": "aetna.redflag.congenital_spine_anomaly",
+      "label": "Congenital anomalies or deformities of the spine",
+      "canonical_labels": ["congenital_spine_anomaly", "tethered_cord", "congenital_scoliosis"],
+      "description": "Congenital anomalies or deformities of the spine.",
+      "source_section": "CPB 0236 medical-necessity list (bullet: congenital anomalies)"
+    },
+    {
+      "id": "aetna.redflag.epidural_lipomatosis",
+      "label": "Lumbar epidural lipomatosis (diagnosis and evaluation)",
+      "canonical_labels": ["epidural_lipomatosis"],
+      "description": "Lumbar epidural lipomatosis — diagnosis and evaluation.",
+      "source_section": "CPB 0236 medical-necessity list (bullet: epidural lipomatosis)"
+    },
+    {
+      "id": "aetna.redflag.post_surgical_recurrent_symptoms",
+      "label": "Recurrent symptoms after spinal surgery",
+      "canonical_labels": ["post_surgical_recurrent_symptoms", "failed_back_surgery_syndrome", "postlaminectomy_syndrome"],
+      "description": "Recurrent symptoms following previous spinal surgery.",
+      "source_section": "CPB 0236 medical-necessity list (bullet: recurrent post-surgical symptoms)"
+    },
+    {
+      "id": "aetna.redflag.pre_injection_evaluation",
+      "label": "Evaluation prior to epidural injection",
+      "canonical_labels": ["pre_injection_evaluation"],
+      "description": "Evaluation prior to an epidural injection to rule out tumor/infection and localize the injection.",
+      "source_section": "CPB 0236 medical-necessity list (bullet: pre-epidural-injection evaluation)"
+    },
+    {
+      "id": "aetna.redflag.malignancy_or_infection_followup",
+      "label": "Follow-up evaluation for spinal malignancy or spinal infection",
+      "canonical_labels": ["malignancy_followup", "spinal_infection_followup", "cancer", "spinal_infection"],
+      "description": "Follow-up evaluation for a known spinal malignancy or spinal infection.",
+      "source_section": "CPB 0236 medical-necessity list (bullet: malignancy/infection follow-up)"
+    },
+    {
+      "id": "aetna.redflag.myelopathy",
+      "label": "Known or suspected myelopathy (including MS)",
+      "canonical_labels": ["myelopathy", "multiple_sclerosis"],
+      "description": "Known or suspected myelopathy, including multiple sclerosis (e.g., hyperreflexia, Hoffmann sign, spastic gait).",
+      "source_section": "CPB 0236 medical-necessity list (bullet: myelopathy)"
+    },
+    {
+      "id": "aetna.redflag.primary_cord_tumor",
+      "label": "Known or suspected primary spinal cord tumor",
+      "canonical_labels": ["primary_spinal_cord_tumor"],
+      "description": "Known or suspected primary spinal cord tumor.",
+      "source_section": "CPB 0236 medical-necessity list (bullet: primary cord tumor)"
+    },
+    {
+      "id": "aetna.redflag.spinal_bone_tumor_or_metastases",
+      "label": "Primary spinal bone tumors or suspected vertebral/paraspinal/intraspinal metastases",
+      "canonical_labels": ["cancer", "spinal_metastases", "primary_spinal_bone_tumor"],
+      "description": "Primary spinal bone tumors, or suspected vertebral / paraspinal / intraspinal metastases (e.g., history of breast/lung/prostate cancer with new back pain, lytic lesion on x-ray, night pain).",
+      "source_section": "CPB 0236 medical-necessity list (bullet: spinal bone tumor/metastases)"
+    },
+    {
+      "id": "aetna.redflag.progressive_symptoms_despite_conservative_management",
+      "label": "Progressively severe symptoms despite conservative management",
+      "canonical_labels": ["progressive_symptoms_despite_conservative_management"],
+      "description": "Progressively severe symptoms despite documented conservative management. Duration/severity are not defined numerically in the policy — clinician judgment applies.",
+      "source_section": "CPB 0236 medical-necessity list (bullet: progressive symptoms)"
+    },
+    {
+      "id": "aetna.redflag.rapid_neuro_deficit",
+      "label": "Rapidly progressing neurological deficit, or major motor weakness",
+      "canonical_labels": ["rapid_neuro_deficit", "motor_weakness", "foot_drop", "major_motor_weakness"],
+      "description": "Rapidly progressing neurological deficit, or major motor weakness (e.g., foot drop, inability to walk).",
+      "source_section": "CPB 0236 medical-necessity list (bullet: rapid neurological deficit)"
+    },
+    {
+      "id": "aetna.redflag.severe_back_pain_hospitalization",
+      "label": "Severe back pain (e.g., requiring hospitalization)",
+      "canonical_labels": ["severe_back_pain_hospitalization"],
+      "description": "Severe back pain requiring hospitalization or IV opioids.",
+      "source_section": "CPB 0236 medical-necessity list (bullet: severe back pain)"
+    },
+    {
+      "id": "aetna.redflag.infection",
+      "label": "Suspected infectious process (osteomyelitis, epidural abscess, soft tissue)",
+      "canonical_labels": ["spinal_infection", "epidural_abscess", "osteomyelitis", "discitis"],
+      "description": "Suspected infectious process: osteomyelitis, epidural abscess, or soft-tissue spinal infection (e.g., fever, IV drug use, elevated ESR/CRP, positive blood cultures).",
+      "source_section": "CPB 0236 medical-necessity list (bullet: suspected infection)"
+    },
+    {
+      "id": "aetna.redflag.spinal_cord_injury_trauma",
+      "label": "Suspected spinal cord injury secondary to trauma",
+      "canonical_labels": ["spinal_cord_injury_trauma"],
+      "description": "Suspected spinal cord injury secondary to trauma.",
+      "source_section": "CPB 0236 medical-necessity list (bullet: SCI from trauma)"
+    },
+    {
+      "id": "aetna.redflag.fracture_trauma",
+      "label": "Suspected spinal fracture/dislocation secondary to trauma (plain films not conclusive)",
+      "canonical_labels": ["fracture", "post_trauma_fracture", "spinal_dislocation_trauma"],
+      "description": "Suspected spinal fracture or dislocation secondary to trauma where plain films are not conclusive.",
+      "source_section": "CPB 0236 medical-necessity list (bullet: suspected fracture/dislocation)"
+    },
+    {
+      "id": "aetna.redflag.transverse_myelitis",
+      "label": "Suspected transverse myelitis",
+      "canonical_labels": ["transverse_myelitis"],
+      "description": "Suspected transverse myelitis (e.g., sensory level, acute myelopathy).",
+      "source_section": "CPB 0236 medical-necessity list (bullet: transverse myelitis)"
+    }
+  ],
+
+  "conservative_therapy": {
+    "pathways": [
+      {
+        "id": "aetna.pathway.radiculopathy_6wk",
+        "applies_when": "has_radiculopathy",
+        "weeks": 6,
+        "description": "Persistent back or neck pain with radiculopathy as evidenced by pain plus objective findings of motor or reflex changes in the specific nerve root distribution, with no improvement after 6 weeks of conservative therapy.",
+        "source_section": "CPB 0236 medical-necessity list (bullet: radiculopathy + 6wk)"
+      },
+      {
+        "id": "aetna.pathway.spondylolisthesis_or_ddd_4wk",
+        "applies_when": "has_spondylolisthesis_or_ddd",
+        "weeks": 4,
+        "description": "Spondylolisthesis or degenerative disease of the spine that has not responded to 4 weeks of conservative therapy.",
+        "source_section": "CPB 0236 medical-necessity list (bullet: spondylolisthesis/DDD + 4wk)"
+      }
+    ],
+    "accepted_kinds": [
+      "ACTIVITY_MODIFICATION",
+      "NSAID",
+      "ANALGESIC_NON_OPIOID",
+      "ANALGESIC_OPIOID",
+      "MUSCLE_RELAXANT"
+    ],
+    "min_kinds_count": 1,
+    "notes": "Per CPB 0236 footnote verbatim: \"Conservative therapy = moderate activity, analgesics, non-steroidal anti-inflammatory drugs, muscle relaxants.\" PHYSICAL_THERAPY is NOT named in CPB 0236 (it is addressed in related CPB 0016 for injections) and is deliberately omitted here — utilization-review practice may differ from footnote letter, flagged as clinician-review gap. EPIDURAL_INJECTION, SPINAL_MANIPULATION, GABAPENTINOID, ORAL_CORTICOSTEROID, HOME_EXERCISE, EDUCATION, OCCUPATIONAL_THERAPY are not named and are excluded from accepted_kinds. Footnote is ambiguous on whether all four named items must co-occur or whether a subset satisfies the trial; engine uses min_kinds_count=1 for v1."
+  },
+
+  "prior_imaging": {
+    "has_hard_lookback_window": false,
+    "lookback_months": null,
+    "narrative": "No numeric lookback window is published. Background cites evidence that repeat/updated imaging does not reduce revision rates in adults with lumbar degenerative disease (Ries 2018; Lee 2019) and discourages serial imaging absent clinical change. Repeat MRI in different positions (flexion/extension/rotation/lateral bending) and with/without weight-bearing is deemed experimental/investigational."
+  },
+
+  "coverage_gating": {
+    "covered_icd_patterns": [
+      "G83.4",
+      "M48.0",
+      "M50",
+      "M51",
+      "M54.1",
+      "M54.3",
+      "M54.9",
+      "C79.51",
+      "C79.52",
+      "M46.2",
+      "M46.3",
+      "S32.0",
+      "Q05",
+      "Q06"
+    ],
+    "excluded_icd_patterns": [],
+    "excluded_scope": null,
+    "age_min": null,
+    "age_max": null
+  },
+
+  "notes": "ICD-10 exclusions: none apply to lumbar MRI under CPB 0236. The policy's only explicit ICD-10 exclusion is R40.20–R40.2444 (Coma) scoped to \"routine MRI after a normal CT of the cervical spine\" — that is cervical-specific and does NOT apply to CPT 72148. Screening / asymptomatic surveillance (Z-code space) is excluded implicitly via the medical-necessity-list requirement, not via an explicit exclusion list. Experimental / investigational items not encoded as rule inputs for v1 but relevant for reasoning trace: BoneMRI (MRI-based synthetic CT), dynamic-kinetic MRI of the cervical spine, dual-energy CT for bone-marrow edema in acute vertebral fractures. CPB 0236 does not specify an age cutoff. Related policies: CPB 0016 (Back Pain: Invasive Procedures) uses a 6-week threshold for SI-joint injections, consistent with the 6-week threshold here for radiculopathy; CPB 0743 (Spinal Surgery) refers back to imaging policies and does not restate MRI criteria."
+}
