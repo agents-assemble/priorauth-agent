@@ -1,0 +1,76 @@
+"""priorauth_agent — A2A application entry point.
+
+Run locally:
+    uv run uvicorn a2a_agent.app:a2a_app --host 0.0.0.0 --port 8001
+Or via Makefile:
+    make agent
+
+Agent card (public, no auth):
+    GET http://localhost:8001/.well-known/agent-card.json
+
+All other endpoints require the X-API-Key header (set via AGENT_API_KEY in
+your local .env). Prompt Opinion uses this key when calling us after registration.
+
+For the Week-1 Platform Spike we advertise the FHIR scopes we'll eventually
+need so PO can exercise the FHIR-metadata flow end-to-end, even though the
+spike agent itself has no tools yet. This lets us validate the full round-trip
+(PO chat -> our agent card -> X-API-Key call -> FHIR-metadata extraction ->
+Gemini -> response) before adding MCP tools.
+"""
+
+from __future__ import annotations
+
+import os
+
+from a2a.types import AgentSkill
+
+from a2a_agent.agent import root_agent
+from a2a_agent.po_base.app_factory import create_a2a_app
+
+# Note: .env is loaded in a2a_agent/__init__.py — runs before this module's
+# imports so po_base/middleware.py can read AGENT_API_KEY at its own import time.
+
+_PO_BASE = os.environ.get("PO_PLATFORM_BASE_URL", "http://localhost:5139")
+_AGENT_URL = os.environ.get(
+    "AGENT_PUBLIC_URL",
+    os.environ.get("BASE_URL", "http://localhost:8001"),
+)
+
+a2a_app = create_a2a_app(
+    agent=root_agent,
+    name="priorauth_agent",
+    description=(
+        "Prior authorization agent for lumbar MRI (CPT 72148). "
+        "Evaluates payer criteria against a patient's FHIR context and generates "
+        "a ready-to-submit PA letter (or a needs-info checklist)."
+    ),
+    url=_AGENT_URL,
+    port=8001,
+    fhir_extension_uri=f"{_PO_BASE}/schemas/a2a/v1/fhir-context",
+    # SMART-on-FHIR scopes we will need for Week 2 MCP tools. Advertised now
+    # so PO's registration UI shows the correct scope list and we do not have
+    # to re-register after adding tools. All are read-only ('.rs' = read/search).
+    fhir_scopes=[
+        {"name": "patient/Patient.rs", "required": True},
+        {"name": "patient/Condition.rs", "required": True},
+        {"name": "patient/MedicationRequest.rs", "required": True},
+        {"name": "patient/Observation.rs", "required": True},
+        {"name": "patient/ServiceRequest.rs", "required": True},
+        {"name": "patient/Coverage.rs", "required": True},
+        {"name": "patient/Procedure.rs", "required": False},
+        {"name": "patient/DocumentReference.rs", "required": False},
+    ],
+    skills=[
+        AgentSkill(
+            id="prior-auth-lumbar-mri",
+            name="prior-auth-lumbar-mri",
+            description=(
+                "End-to-end prior authorization for outpatient lumbar MRI "
+                "(CPT 72148). Pulls patient context from FHIR, evaluates "
+                "payer criteria, and returns either an approved PA letter "
+                "or a needs-info checklist."
+            ),
+            tags=["prior-auth", "mri", "lumbar", "fhir", "cpt-72148"],
+        ),
+    ],
+)

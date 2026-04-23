@@ -8,6 +8,147 @@ Newest entries at the top. Link to specific PO docs / support threads / Discord 
 
 ---
 
+## 2026-04-23 — `load_dotenv()` ordering + stale shell-env footgun
+
+**Context**: Surfaced while fixing the `AGENT_API_KEY` bug on PR #2 (below). Hit *twice* in one session, worth a dedicated entry.
+
+**Observation**: Two separate import-time failure modes around `load_dotenv()`:
+
+1. **Ordering**: If `load_dotenv()` lives in `a2a_agent/app.py` **after** the `from a2a_agent.po_base.app_factory import create_a2a_app` line, it runs too late. `po_base/middleware.py` computes `VALID_API_KEYS = _load_valid_api_keys()` at **module import time** — so by the time `load_dotenv()` executes, the middleware has already cached `VALID_API_KEYS == set()` from an empty env, and every authenticated request 403s.
+2. **No-override default**: `load_dotenv()` does NOT overwrite env vars already set in the parent process. If a developer has a stale `AGENT_API_KEY=test-placeholder` left in their shell from an earlier session, `.env` is silently ignored and the agent happily accepts a placeholder key in prod-shaped config. Almost-impossible to spot without explicit debug printouts.
+
+**Explanation / workaround**:
+
+1. Moved `load_dotenv(override=True)` to `a2a_agent/__init__.py` as the **first statement** (just below the module docstring). This runs unconditionally when *any* `a2a_agent.*` submodule is imported — including `po_base.middleware` — so env is populated before any module-level env reads.
+2. `override=True` makes `.env` the single source of truth for local dev. Container prod is unaffected because the image has no `.env` file, so `load_dotenv` is a no-op there.
+3. Also added `--env-file .env` to `make agent` as belt-and-suspenders (uvicorn loads env before our Python code even imports, pre-empting any ordering question).
+
+**Impact / reminder**: Any future subpackage that reads env at import time (likely `mcp_server` too, once Kevin wires credentials in) must rely on the same `__init__.py` pattern, or explicitly import and call `load_dotenv(override=True)` before its own module-level state. Do NOT let env reads scatter across ad-hoc `os.getenv()` calls in `app.py`-style entry points.
+
+**Source**: PR #2 review by @kevinsgeo caught the AGENT_API_KEY bug. I caught this ordering issue while writing the positive-auth smoke test (which Kevin's review implicitly required). Original `app.py` pattern came from upstream PO reference repo — they do not use workspace-style package entry points, so upstream dodges it.
+
+---
+
+## 2026-04-23 — `AGENT_API_KEY` env var silently ignored in upstream middleware
+
+**Context**: PR #2 review — Kevin caught before merge.
+
+**Observation**: `a2a_agent/po_base/middleware.py::_load_valid_api_keys` (verbatim from upstream) only reads `API_KEYS`, `API_KEY_PRIMARY`, `API_KEY_SECONDARY`. Our spec advertises `AGENT_API_KEY` as the canonical variant in `.env.example`, `.cursor/rules/a2a-agent.md`, and `docs/PLAN.md`. Anyone following the documented setup would get `VALID_API_KEYS == set()` and every non-agent-card request would 401 — including every single PO → us call.
+
+My spike smoke test passed because I only hit the unauthenticated `GET /.well-known/agent-card.json` endpoint, never a POST with the `X-API-Key` header. **Lesson for the rest of the hackathon**: every scaffold PR that adds an auth path must include a positive-auth curl check (POST with the advertised key and assert non-401), not just the public endpoint.
+
+**Explanation / workaround**: 3-line local mod to `_load_valid_api_keys` — read `AGENT_API_KEY` first, then fall through to the upstream env var list. Documented in `a2a_agent/REFERENCE.md` section "Local modifications".
+
+**Impact**: PR #2 fix. Added `make agent-post-smoke` target planned for next PR (curl POST with X-API-Key → assert 200 or 400-with-jsonrpc-error, never 401).
+
+**Source**: PR #2 review by @kevinsgeo.
+
+---
+
+## 2026-04-23 — Week 3 checklist: redact `patient_id` in logs before real-patient demo
+
+**Context**: PR #2 review, nit #3.
+
+**Observation**: `a2a_agent/po_base/fhir_hook.py` logs `patient_id` in plain text (`"FHIR_PATIENT_FOUND value=%s"`, lines ~190-220). Fine for our synthetic demo patients A/B/C, but for any PO-chat demo against real workspace FHIR data this is a PII/PHI leak vector.
+
+**Explanation / workaround**: Pre-demo hardening. Replace the plain-text patient log with a hashed / first-4-chars-only format, similar to how `token_fingerprint()` is already used for the FHIR token. Keep it behind `LOG_LEVEL=DEBUG` if full identifier is ever needed locally.
+
+**Impact**: Week 3 Day 1 checklist entry (pre-submission). Add to `docs/PLAN.md` Risk Register as "P3 — log redaction audit before demo recording".
+
+**Source**: PR #2 review by @kevinsgeo. No action this PR.
+
+---
+
+## 2026-04-23 — Reference repo dependency pins (a2a-sdk namespace break)
+
+**Context**: Platform Spike scaffold — copying PO's `po-adk-python` infra into `a2a_agent/po_base/` and running `uv sync --all-packages --all-extras --dev`.
+
+**Observation**: PO's `requirements.txt` pins `a2a-sdk[http-server]>=0.3.0` with no upper bound. `uv` resolved this to `a2a-sdk==1.0.1`, which reorganised module paths — `a2a.server.apps` was moved. This broke `google-adk==1.31.1`'s internal import: `from a2a.server.apps import A2AStarletteApplication` raises `ModuleNotFoundError: No module named 'a2a.server.apps'`.
+
+**Explanation / workaround**: Until `google-adk` ships a release that imports from the new `a2a-sdk` 1.0+ namespace, we must cap the SDK to `<1.0`. Added to `a2a_agent/pyproject.toml`:
+
+```toml
+"google-adk>=1.25.0,<2.0",
+"a2a-sdk[http-server]>=0.3.0,<1.0",
+```
+
+Resolved versions after pin: `google-adk 1.31.1`, `a2a-sdk 0.3.26`. Agent boots and serves the agent card correctly under these pins.
+
+**Impact**: Pinned in `a2a_agent/pyproject.toml`. Added to [REFERENCE.md](../a2a_agent/REFERENCE.md) upstream-sync checklist. When we pull updates from PO's `po-adk-python`, keep our pin; the reference repo's loose pin will silently break for other forkers until PO bumps it. Worth a tiny courtesy PR back upstream.
+
+**Source**: Encountered during Platform Spike. `google-adk` changelog: https://github.com/google/adk-python/releases, `a2a-sdk` v1.0 notes: https://github.com/google-a2a/a2a-python/blob/main/CHANGELOG.md.
+
+---
+
+## 2026-04-23 — `uv sync` must use `--all-packages` in workspace layout
+
+**Context**: First sync after adding `google-adk` + `a2a-sdk` deps to `a2a_agent/pyproject.toml`.
+
+**Observation**: `uv sync --all-extras --dev` (what our `make install` used) reports "Resolved 147 packages" but does **not** install the workspace member's deps. `a2a-sdk` / `google-adk` were silently missing; `from a2a.types import AgentSkill` failed at runtime.
+
+**Explanation / workaround**: In a `uv` workspace (root `pyproject.toml` has `[tool.uv.workspace]`), dependencies declared on workspace *members* are only installed when `--all-packages` is passed. Updated `Makefile`:
+
+```makefile
+install: ## Install all dependencies via uv (including workspace members)
+	uv sync --all-packages --all-extras --dev
+```
+
+**Impact**: Makefile updated. Anyone (incl. Person A) pulling this branch should run `make install` (not a raw `uv sync`). Added as a header note to the `make install` target.
+
+**Source**: `uv` workspaces docs: https://docs.astral.sh/uv/concepts/projects/workspaces/.
+
+---
+
+## 2026-04-23 — Upstream reference is unlicensed (flag for pre-publish)
+
+**Context**: Bootstrapping `a2a_agent/po_base/` from `prompt-opinion/po-adk-python`.
+
+**Observation**: The upstream repo has **no LICENSE file**. Their README clearly positions it as "Runnable examples showing how to build external agents" — hackathon starter template — but the absence of an explicit license means default-copyright-restrictive.
+
+**Explanation / workaround**: Acceptable for hackathon use. Not acceptable for Marketplace Studio publishing. Tracked in `a2a_agent/REFERENCE.md` with attribution + fork log. Before Week 3 Day 1 (submission week), email `support@promptopinion.ai` to confirm license terms or request they add an OSS license to the reference. Backstop: rewrite `po_base/` against `a2a-sdk` directly with zero upstream code.
+
+**Impact**: [a2a_agent/REFERENCE.md](../a2a_agent/REFERENCE.md) added. Week 3 follow-up logged.
+
+**Source**: https://github.com/prompt-opinion/po-adk-python (checked 2026-04-23, no LICENSE file).
+
+---
+
+## 2026-04-23 — A2A v1 agent-card schema quirks
+
+**Context**: Verifying local agent card at `GET /.well-known/agent-card.json`.
+
+**Observation**: PO's `app_factory.py` carries a compatibility shim (`AgentCardV1`, `AgentExtensionV1`) because `a2a-sdk 0.3.x`'s Pydantic types don't match A2A v1 exactly. Specifically:
+
+1. `url` is still emitted at the top level (deprecated in v1) AND duplicated inside `supportedInterfaces[0].url` (required by v1). PO's registration reads from `supportedInterfaces`.
+2. `capabilities.stateTransitionHistory` must be `false` — v1-compliant, PO rejects agents that set this true.
+3. `securitySchemes` uses nested typed-key format: `{"apiKey": {"apiKeySecurityScheme": {...}}}`. PO's UI expects the inner key to be `apiKeySecurityScheme` literally.
+
+**Explanation / workaround**: The shim in `po_base/app_factory.py` handles all three automatically — we don't construct agent cards by hand. Just pass `url=...`, `require_api_key=True`, and the factory emits the v1-compliant JSON. Our live test confirmed all three flags render correctly.
+
+When `a2a-sdk` ships native v1 support, follow the 3-step removal in [REFERENCE.md](../a2a_agent/REFERENCE.md).
+
+**Impact**: None — factory handles it. Logged for when we upgrade the SDK.
+
+**Source**: `po-adk-python/README.md`, top-level note: "The agent card published by all agents in this repo has been updated to comply with the A2A v1 specification as required by Prompt Opinion."
+
+---
+
+## 2026-04-23 — Gemini 3.1 Flash Lite Preview — stability watch
+
+**Context**: Model selection per PO's Connectathon recommendation.
+
+**Observation**: Google AI Studio lists `gemini-3.1-flash-lite-preview` as the Connectathon-recommended model. It is a **preview** tier — subject to rate-limit tightening, renames, or deprecation without deprecation windows.
+
+**Explanation / workaround**: Set as default in `.env.example`. Implementation reads `os.environ.get("GEMINI_MODEL", "gemini-3.1-flash-lite-preview")` so a single `.env` flip rolls back to GA. Backstop model: `gemini-2.5-flash-lite` (GA, confirmed stable).
+
+**Weekly recheck** (Person B): every Monday, open https://aistudio.google.com/app/apikey, confirm the preview model is still listed for our key. If it disappears or rate-limits drop, flip `.env` to `gemini-2.5-flash-lite` on all deployed surfaces within 30 minutes. The backstop should remain functional because all our prompts target the flash-lite capability envelope.
+
+**Impact**: `.env.example` updated with preview comment. Calendar reminder for Person B: Monday morning model check.
+
+**Source**: Google AI Studio model list, user-provided identifier confirmed 2026-04-23.
+
+---
+
 ## Template
 
 ```

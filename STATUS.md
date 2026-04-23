@@ -16,6 +16,12 @@ Newest entries go at the top. Keep each entry tight — 3 bullets, one line each
 
 ---
 
+## 2026-04-23 — Person B (PR #2 fix pass)
+
+- Done: Addressed Kevin's review on PR #2. (1) Fixed the blocking `AGENT_API_KEY` bug in `a2a_agent/po_base/middleware.py::_load_valid_api_keys` — upstream middleware only read `API_KEYS`/`API_KEY_PRIMARY`/`API_KEY_SECONDARY`, so our documented canonical `AGENT_API_KEY` was silently ignored and every auth'd request 403'd. (2) Added `[[tool.mypy.overrides]]` for `a2a_agent.po_base.*` mirroring the ruff per-file-ignores — mypy strict now actually passes 11 source files clean instead of hiding 43 upstream errors behind CI's `continue-on-error: true`. (3) Found a **second** bug while writing the positive-auth smoke test: `load_dotenv()` in `app.py` ran after `middleware.py` had already cached `VALID_API_KEYS` from empty env; moved `load_dotenv(override=True)` to `a2a_agent/__init__.py` top-level, added `--env-file .env` to `make agent` as belt-and-suspenders. (4) Updated `REFERENCE.md` and `docs/po_platform_notes.md` with the middleware local-mod, the ruff-format normalisation note (Kevin nit #2), a Week 3 log-redaction task (nit #3), and the load_dotenv footgun writeup. (5) **Manually verified** auth end-to-end via curl: correct `X-API-Key` → HTTP 200, wrong key → 403, no key → 401. Ruff check, ruff format --check, mypy strict all clean.
+- Blocked: Nothing on our side. Waiting on Kevin to re-review the follow-up commit and approve.
+- Next: Once PR #2 merges → resume step 6 (register agent in PO workspace with ngrok URL), step 7 (round-trip PO chat → Gemini). Also planning a `make agent-post-smoke` target for the next PR so positive-auth is covered in CI, not just by my manual curl.
+
 ## 2026-04-23 — Person A
 
 - Done: Local dev env bootstrapped — pinned Python 3.11 via `.python-version`, added minimal workspace-member stubs (`mcp_server/pyproject.toml`, `a2a_agent/pyproject.toml`, matching `__init__.py` each) so `uv sync` resolves, committed `uv.lock` for reproducibility. Verified `shared.models` imports cleanly under the locked toolchain (ruff 0.15, mypy 1.20, pytest 9.0).
