@@ -173,3 +173,50 @@ CPB 0236 does not specify an age cutoff (adult vs. pediatric) for MRI medical ne
 - The ACR `acsearch.acr.org/docs/69483/narrative/` page renders as a Preview with the rating tables and variant definitions in full, but the narrative discussion per variant/procedure shows only headings in the extracted markdown (the narrative body is rendered dynamically). Variant tables, panel member list, references, and appropriateness categories are complete; per-procedure prose discussion was not captured and was not needed for the extraction.
 - No Wayback Machine fallback was used because primary sources all resolved.
 - CPB 0743 (Aetna Spinal Surgery) was verified via search snippets; the full text was not re-fetched because CPB 0743 addresses surgical medical necessity and does not restate MRI-specific thresholds. CPB 0016 (Back Pain Invasive Procedures) was surfaced in passing and confirms Aetna's use of a 6-week conservative-therapy threshold for injection procedures, consistent with CPB 0236's radiculopathy threshold.
+
+---
+
+## Normalized `TherapyTrial.kind` taxonomy
+
+Added in response to [PR #6 review comment](https://github.com/agents-assemble/priorauth-agent/pull/6#pullrequestreview-4166440051) — closes the loop between policy phrasing above and `shared/models.py::TherapyTrial.kind`.
+
+Cigna/eviCore and Aetna use different terms for the same conservative-therapy concepts. The rule engine evaluates against a *single* normalized `kind` string per trial, so each payer JSON's `accepted_kinds: list[str]` must reference these normalized values — NOT the policy's original phrasing. `fetch_patient_context` is responsible for mapping FHIR source codes (RxNorm drug class, SNOMED/CPT procedure codes, free-text note content) into this same normalized space.
+
+| Normalized `TherapyTrial.kind` | Cigna/eviCore phrasing (SP-1.0) | Aetna CPB 0236 phrasing (footnote) | Notes |
+|---|---|---|---|
+| `ACTIVITY_MODIFICATION` | "activity modification", "avoidance of aggravating activities", "cross-training" | "moderate activity" | Aetna's "moderate activity" treated as equivalent. Self-reported activity change qualifies; no session count. |
+| `EDUCATION` | "education" | — | Patient education on posture/body mechanics. Cigna names explicitly; Aetna does not. |
+| `NSAID` | "NSAIDs" | "non-steroidal anti-inflammatory drugs" | Direct match. Maps from RxNorm ATC class M01A. |
+| `ANALGESIC_NON_OPIOID` | "non-narcotic analgesic medications" | "analgesics" (non-opioid) | Acetaminophen, adjuvant analgesics (non-gabapentinoid). |
+| `ANALGESIC_OPIOID` | "narcotic analgesic medications" | "analgesics" (opioid) | Short-course opioids. Presence does NOT imply quality-of-trial; opioid trials are a red-flag-adjacent signal, not a conservative-therapy badge. |
+| `MUSCLE_RELAXANT` | (not named; Cigna buckets under broader "non-narcotic analgesic medications") | "muscle relaxants" | Cyclobenzaprine, tizanidine, methocarbamol, metaxalone. Aetna names explicitly — matters for Patient B analysis (see §Conflicts). |
+| `GABAPENTINOID` | (not named explicitly; adjuvant analgesic — ambiguous) | — | Gabapentin, pregabalin. Neither policy names; present in `shared/models.py::TherapyTrial.kind` docstring examples. Flagged as gap requiring clinician review before Week 3. |
+| `ORAL_CORTICOSTEROID` | "oral corticosteroids" | — | Short-course prednisone / methylprednisolone dose pack. Cigna names; Aetna does not. |
+| `EPIDURAL_INJECTION` | "injectable corticosteroids", "interventional pain procedures" | — (addressed in CPB 0016, not 0236) | Transforaminal / interlaminar ESI. Cigna's "severe radicular pain" red-flag bypass requires ESI to be **planned**, not completed — separate semantic from counting ESI as a completed conservative-therapy trial. |
+| `PHYSICAL_THERAPY` | "physical therapy" | — (arguably subsumed under "moderate activity", but NOT named) | **Disagreement**: Cigna names PT explicitly and requires "provider-directed" for home exercise; Aetna's CPB 0236 footnote does not name PT at all. Drives Patient B's cross-payer asymmetry. See §Conflicts. |
+| `OCCUPATIONAL_THERAPY` | "occupational therapy" | — | Rare for lumbar LBP in practice; included for completeness. Cigna treats as equivalent to PT for conservative-therapy accounting. |
+| `SPINAL_MANIPULATION` | "spinal manipulation" | — | Chiropractic care. Cigna explicitly qualifying; Aetna silent — flagged gap for clinician review. |
+| `HOME_EXERCISE` | "provider-directed home exercise/stretching program" | — | **Cigna gate**: must be provider-directed. Self-directed (e.g. Patient B's YouTube stretches from `demo/clinical_notes/patient_b.md`) does NOT qualify under Cigna. Aetna silent. |
+
+### Integration implications for the JSON-encoding PR
+
+- Each payer JSON's `accepted_kinds: list[str]` references the normalized column only. Policy phrasing can live in `CriterionCheck.description` for human-readability but never in `accepted_kinds`.
+- `fetch_patient_context` must produce `TherapyTrial.kind` values from the normalized set — document the FHIR → normalized mapping in a dedicated `docs/therapy_normalization.md` when the JSON-encoding PR lands (RxNorm class → `NSAID`, SNOMED 91251008 → `PHYSICAL_THERAPY`, CPT 62323 → `EPIDURAL_INJECTION`, free-text "YouTube stretches" → NOT `HOME_EXERCISE` under Cigna, etc.).
+- Per AGENTS.md, any change to `shared/models.py` requires both-reviewer approval. Options for the JSON-encoding PR:
+  - **Option A (stricter)**: tighten `TherapyTrial.kind` from free-form `str` to `Literal[...]` or `StrEnum` covering the 13 normalized values above. Pro: machine-enforced normalization, IDE autocomplete. Con: every new policy addition requires a `shared/` PR.
+  - **Option B (looser)**: keep `kind: str`, add a class-level docstring table listing the canonical 13 values, add a `tests/shared/test_therapy_kind_taxonomy.py` golden-file test that asserts both payer JSONs only reference canonical values. Pro: flexible, `shared/` stays stable. Con: drift possible if future JSONs bypass the lint.
+  - Recommendation: Option B for now (avoids a both-reviewer gate on every new payer), revisit at Week 3 if the engine surfaces kind-mismatches.
+
+### Gaps requiring clinician review (Week 3 candidate — per `docs/PLAN.md` §Risk Register)
+
+- **`GABAPENTINOID`**: not named in either payer policy. Is a documented gabapentin trial (common for radicular pain) a qualifying conservative-therapy trial for lumbar MRI authorization, or does it not count?
+- **Aetna silence on PT**: does a completed 8-session PT course satisfy CPB 0236's footnote, or does Aetna in practice require all four named items (moderate activity + analgesics + NSAIDs + muscle relaxants)? Utilization-review practice may differ from footnote letter.
+- **`SPINAL_MANIPULATION`**: Aetna silent. Does documented chiropractic care count as conservative therapy under Aetna? Cigna says yes.
+- **`ANALGESIC_OPIOID`**: neither policy says opioid-only trials are disqualifying, but clinically a pure opioid trial is considered inadequate conservative therapy. Confirm whether the rule engine should weight opioid-only trials differently than NSAID-plus-anything trials.
+
+### Cross-reference to existing artifacts
+
+- `shared/models.py::TherapyTrial.kind` — currently `str` with 5 informal docstring examples (`NSAID`, `MUSCLE_RELAXANT`, `GABAPENTINOID`, `PHYSICAL_THERAPY`, `EPIDURAL_INJECTION`). The taxonomy above is a superset; the JSON-encoding PR is the natural moment to reconcile.
+- `demo/clinical_notes/patient_a.md` — documents NSAID (naproxen) + `MUSCLE_RELAXANT` (cyclobenzaprine) + `PHYSICAL_THERAPY` (8 sessions). Expected to pass all conservative-therapy checks on both payers.
+- `demo/clinical_notes/patient_b.md` — documents NSAID only (PT incomplete, self-directed YouTube stretches). Under the taxonomy above: clears `NSAID`, fails `PHYSICAL_THERAPY` (Cigna provider-directed gate), fails `HOME_EXERCISE` (Cigna provider-directed gate), potentially clears `ACTIVITY_MODIFICATION` (Aetna "moderate activity" — loose read). Confirms Sanjit's review observation that Patient B is a stronger needs-info signal against Cigna than Aetna under the letter of the policy.
+- `demo/clinical_notes/patient_c.md` — red-flag fast-track; conservative-therapy composition does not matter (criteria bypassed under both payers' red-flag provisions).
