@@ -60,6 +60,19 @@ ignore = [
 [tool.ruff.lint.per-file-ignores]
 "tests/**" = ["PLR2004"]  # magic values in tests are fine
 
+# Upstream reference code (copied from prompt-opinion/po-adk-python). We sync
+# this folder periodically; do not fight its upstream style. See a2a_agent/REFERENCE.md.
+"a2a_agent/po_base/**" = [
+    "E501",     # aligned dict formatting in logs/hooks
+    "E402",     # module import after class def (intentional in app_factory.py)
+    "I001",     # upstream import order preserved for easier diffs
+    "PLR0912",  # middleware.dispatch branches by design
+    "PLR0915",  # middleware.dispatch statements by design
+    "PLC0415",  # deferred starlette import inside request scope
+    "RUF012",   # upstream class-level ANSI color dict
+    "B008",     # default args in upstream factory
+]
+
 [tool.mypy]
 python_version = "3.11"
 strict = true
