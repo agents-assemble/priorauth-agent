@@ -8,6 +8,51 @@ Newest entries at the top. Link to specific PO docs / support threads / Discord 
 
 ---
 
+## 2026-04-23 — FastMCP capability extensions require `get_capabilities` monkeypatch
+
+**Context**: Scaffolding `mcp_server/` and needing to advertise the `ai.promptopinion/fhir-context` extension (the custom capability key PO's registration UI looks for to know we accept SHARP-propagated FHIR tokens).
+
+**Observation**: `mcp>=1.9.x`'s `FastMCP` does not expose a first-class API for adding custom capability keys. Upstream `po-community-mcp/python/mcp_instance.py` works around this by wrapping `mcp._mcp_server.get_capabilities` with a monkeypatch that mutates the returned `ServerCapabilities` Pydantic model's `model_extra` dict to inject the custom `extensions` key. Two sub-surprises:
+
+1. `ServerCapabilities.model_extra` is `None` unless the Pydantic model was constructed with extras, so naively indexing `caps.model_extra["extensions"] = ...` raises on a freshly-built capabilities object. Must initialize `caps.__pydantic_extra__ = {}` first.
+2. mypy strict complains about `caps.model_extra["extensions"] = ...` because `model_extra` is typed `dict[str, Any] | None` even after the `is None` check (the property re-reads `__pydantic_extra__` each call, so the type checker can't narrow across the assignment). Workaround: `assert caps.model_extra is not None` after the init — mypy narrows on the assertion, runtime cost is zero in `-O` builds.
+
+**Explanation / workaround**: Encapsulated the entire mess in `mcp_server/server.py::_patch_capabilities(mcp: FastMCP) -> None` so tool files never see it. Verified live: `POST /mcp` with an `initialize` JSON-RPC returns the `capabilities.extensions["ai.promptopinion/fhir-context"]` blob with all 8 scopes we declare. Cross-reference tracker: https://github.com/modelcontextprotocol/python-sdk — watch for a first-class `extensions=` kwarg on `FastMCP(...)` and delete the monkeypatch when it ships.
+
+**Impact**: Logic lives in `mcp_server/server.py`. Upstream-sync checklist in `mcp_server/REFERENCE.md` notes the monkeypatch as the most likely file to churn on an `mcp` bump.
+
+**Source**: Direct read of `prompt-opinion/po-community-mcp/python/mcp_instance.py@e19ec91` + our own mypy struggle writing the strict-typed version.
+
+---
+
+## 2026-04-23 — FastMCP `Context` is generic; strict mypy needs a type alias
+
+**Context**: Writing `fetch_patient_context(ctx: Context)` with `mypy --strict` on.
+
+**Observation**: `mcp.server.fastmcp.Context` is declared `Generic[ServerSessionT, LifespanContextT, RequestT]`. Strict mypy rejects unparameterized `Context` with `error: Missing type arguments for generic type "Context"  [type-arg]`. The three typevars are plumbing concerns our tools never read — we only ever access `ctx.request_context.request.headers`, which is `Any`-typed downstream.
+
+**Explanation / workaround**: Defined a single alias `McpContext = Context[Any, Any, Any]` in `mcp_server/fhir/context.py` and use it consistently in every tool signature. Upstream PO community MCP sidesteps this because they run mypy non-strict — doesn't show up in their source, would bite any fork that ratchets strictness.
+
+**Impact**: `mcp_server/fhir/context.py` exports `McpContext`. All tool files import from there. Documented as part of the ruleset in `mcp_server/REFERENCE.md`.
+
+**Source**: First clean mypy run on the MCP scaffold.
+
+---
+
+## 2026-04-23 — `FastMCP(stateless_http=True)` matters for PO registration
+
+**Context**: Choosing `stateless_http=True` vs `False` when constructing the `FastMCP` instance.
+
+**Observation**: Upstream PO community MCP sets `stateless_http=True` explicitly. Without it, FastMCP expects every client to carry an `mcp-session-id` header established via the initial `initialize` response, which breaks PO's registration flow (PO re-initializes on every tool call rather than threading a persistent session, presumably because workspace UI calls bounce across browser tabs). `stateless_http=True` makes every JSON-RPC round-trip self-contained, trading a tiny amount of FastMCP-internal session-caching for PO-compatible behaviour.
+
+**Explanation / workaround**: Honour upstream's choice. We set `stateless_http=True` in `mcp_server/server.py`. Verified our server responds to a cold `tools/call` immediately after `initialize` without a session header threaded — matches PO's observed behaviour. If we ever want long-lived sessions (e.g. for streaming progress on a slow tool), that's a separate server on a separate port; this server stays stateless.
+
+**Impact**: Single line in `server.py` but a hard gotcha to debug if flipped accidentally. Noted in `mcp_server/REFERENCE.md` upstream-sync checklist.
+
+**Source**: `prompt-opinion/po-community-mcp/python/mcp_instance.py@e19ec91` + behavioural test against our own server.
+
+---
+
 ## 2026-04-23 — `load_dotenv()` ordering + stale shell-env footgun
 
 **Context**: Surfaced while fixing the `AGENT_API_KEY` bug on PR #2 (below). Hit *twice* in one session, worth a dedicated entry.
