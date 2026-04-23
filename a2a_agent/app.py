@@ -27,6 +27,9 @@ from a2a.types import AgentSkill
 from a2a_agent.agent import root_agent
 from a2a_agent.po_base.app_factory import create_a2a_app
 
+# Note: .env is loaded in a2a_agent/__init__.py — runs before this module's
+# imports so po_base/middleware.py can read AGENT_API_KEY at its own import time.
+
 _PO_BASE = os.environ.get("PO_PLATFORM_BASE_URL", "http://localhost:5139")
 _AGENT_URL = os.environ.get(
     "AGENT_PUBLIC_URL",

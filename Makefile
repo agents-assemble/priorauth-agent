@@ -18,7 +18,7 @@ stop: ## Stop local dev stack
 	docker-compose down
 
 agent: ## Run the A2A agent locally on :8001 (reads .env)
-	uv run --package a2a_agent uvicorn a2a_agent.app:a2a_app --host 0.0.0.0 --port 8001 --log-level info --reload
+	uv run --package a2a_agent uvicorn a2a_agent.app:a2a_app --host 0.0.0.0 --port 8001 --log-level info --reload --env-file .env
 
 ngrok: ## Expose local :8001 via ngrok (requires NGROK_AUTHTOKEN in .env on first run)
 	ngrok http 8001

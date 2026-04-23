@@ -30,14 +30,24 @@ def _load_valid_api_keys() -> set[str]:
     Load allowed API keys from environment variables.
 
     Supported formats:
-      API_KEYS=my-key-1,my-key-2
+      AGENT_API_KEY=my-key-1                  (our canonical single-key variant)
+      API_KEYS=my-key-1,my-key-2              (upstream multi-key CSV)
       API_KEY_PRIMARY=my-key-1
       API_KEY_SECONDARY=my-key-2
 
     This keeps the example multi-key friendly without shipping usable secrets
     in source control. In production, populate these values from a secret store.
+
+    LOCAL MOD (see ../REFERENCE.md): upstream only reads API_KEYS /
+    API_KEY_PRIMARY / API_KEY_SECONDARY. We advertise AGENT_API_KEY as the
+    canonical single-key variant across .env.example, .cursor/rules/,
+    and docs/PLAN.md, so it must also be accepted here.
     """
     keys = set()
+
+    agent_key = os.getenv("AGENT_API_KEY", "").strip()
+    if agent_key:
+        keys.add(agent_key)
 
     raw_keys = os.getenv("API_KEYS", "")
     if raw_keys:

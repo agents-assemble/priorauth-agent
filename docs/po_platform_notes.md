@@ -8,6 +8,57 @@ Newest entries at the top. Link to specific PO docs / support threads / Discord 
 
 ---
 
+## 2026-04-23 — `load_dotenv()` ordering + stale shell-env footgun
+
+**Context**: Surfaced while fixing the `AGENT_API_KEY` bug on PR #2 (below). Hit *twice* in one session, worth a dedicated entry.
+
+**Observation**: Two separate import-time failure modes around `load_dotenv()`:
+
+1. **Ordering**: If `load_dotenv()` lives in `a2a_agent/app.py` **after** the `from a2a_agent.po_base.app_factory import create_a2a_app` line, it runs too late. `po_base/middleware.py` computes `VALID_API_KEYS = _load_valid_api_keys()` at **module import time** — so by the time `load_dotenv()` executes, the middleware has already cached `VALID_API_KEYS == set()` from an empty env, and every authenticated request 403s.
+2. **No-override default**: `load_dotenv()` does NOT overwrite env vars already set in the parent process. If a developer has a stale `AGENT_API_KEY=test-placeholder` left in their shell from an earlier session, `.env` is silently ignored and the agent happily accepts a placeholder key in prod-shaped config. Almost-impossible to spot without explicit debug printouts.
+
+**Explanation / workaround**:
+
+1. Moved `load_dotenv(override=True)` to `a2a_agent/__init__.py` as the **first statement** (just below the module docstring). This runs unconditionally when *any* `a2a_agent.*` submodule is imported — including `po_base.middleware` — so env is populated before any module-level env reads.
+2. `override=True` makes `.env` the single source of truth for local dev. Container prod is unaffected because the image has no `.env` file, so `load_dotenv` is a no-op there.
+3. Also added `--env-file .env` to `make agent` as belt-and-suspenders (uvicorn loads env before our Python code even imports, pre-empting any ordering question).
+
+**Impact / reminder**: Any future subpackage that reads env at import time (likely `mcp_server` too, once Kevin wires credentials in) must rely on the same `__init__.py` pattern, or explicitly import and call `load_dotenv(override=True)` before its own module-level state. Do NOT let env reads scatter across ad-hoc `os.getenv()` calls in `app.py`-style entry points.
+
+**Source**: PR #2 review by @kevinsgeo caught the AGENT_API_KEY bug. I caught this ordering issue while writing the positive-auth smoke test (which Kevin's review implicitly required). Original `app.py` pattern came from upstream PO reference repo — they do not use workspace-style package entry points, so upstream dodges it.
+
+---
+
+## 2026-04-23 — `AGENT_API_KEY` env var silently ignored in upstream middleware
+
+**Context**: PR #2 review — Kevin caught before merge.
+
+**Observation**: `a2a_agent/po_base/middleware.py::_load_valid_api_keys` (verbatim from upstream) only reads `API_KEYS`, `API_KEY_PRIMARY`, `API_KEY_SECONDARY`. Our spec advertises `AGENT_API_KEY` as the canonical variant in `.env.example`, `.cursor/rules/a2a-agent.md`, and `docs/PLAN.md`. Anyone following the documented setup would get `VALID_API_KEYS == set()` and every non-agent-card request would 401 — including every single PO → us call.
+
+My spike smoke test passed because I only hit the unauthenticated `GET /.well-known/agent-card.json` endpoint, never a POST with the `X-API-Key` header. **Lesson for the rest of the hackathon**: every scaffold PR that adds an auth path must include a positive-auth curl check (POST with the advertised key and assert non-401), not just the public endpoint.
+
+**Explanation / workaround**: 3-line local mod to `_load_valid_api_keys` — read `AGENT_API_KEY` first, then fall through to the upstream env var list. Documented in `a2a_agent/REFERENCE.md` section "Local modifications".
+
+**Impact**: PR #2 fix. Added `make agent-post-smoke` target planned for next PR (curl POST with X-API-Key → assert 200 or 400-with-jsonrpc-error, never 401).
+
+**Source**: PR #2 review by @kevinsgeo.
+
+---
+
+## 2026-04-23 — Week 3 checklist: redact `patient_id` in logs before real-patient demo
+
+**Context**: PR #2 review, nit #3.
+
+**Observation**: `a2a_agent/po_base/fhir_hook.py` logs `patient_id` in plain text (`"FHIR_PATIENT_FOUND value=%s"`, lines ~190-220). Fine for our synthetic demo patients A/B/C, but for any PO-chat demo against real workspace FHIR data this is a PII/PHI leak vector.
+
+**Explanation / workaround**: Pre-demo hardening. Replace the plain-text patient log with a hashed / first-4-chars-only format, similar to how `token_fingerprint()` is already used for the FHIR token. Keep it behind `LOG_LEVEL=DEBUG` if full identifier is ever needed locally.
+
+**Impact**: Week 3 Day 1 checklist entry (pre-submission). Add to `docs/PLAN.md` Risk Register as "P3 — log redaction audit before demo recording".
+
+**Source**: PR #2 review by @kevinsgeo. No action this PR.
+
+---
+
 ## 2026-04-23 — Reference repo dependency pins (a2a-sdk namespace break)
 
 **Context**: Platform Spike scaffold — copying PO's `po-adk-python` infra into `a2a_agent/po_base/` and running `uv sync --all-packages --all-extras --dev`.

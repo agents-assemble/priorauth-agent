@@ -38,7 +38,9 @@ Tracked in git. Headline changes:
 
 1. **Package namespace rename**: `shared` → `a2a_agent.po_base` to avoid collision with our repo-level `shared/` (which holds Pydantic cross-service contracts — a different concern from PO's ADK plumbing).
 2. **Logger name**: `configure_logging("shared")` → `configure_logging("a2a_agent.po_base")` so log output is correctly namespaced.
-3. Our own `agent.py`, `app.py`, `__init__.py` — not copied from upstream, just follow the same API.
+3. **`middleware.py::_load_valid_api_keys` — added `AGENT_API_KEY` support** (PR #2 review). Upstream reads only `API_KEYS` / `API_KEY_PRIMARY` / `API_KEY_SECONDARY`. We advertise `AGENT_API_KEY` as the canonical single-key variant across `.env.example`, `.cursor/rules/a2a-agent.md`, and `docs/PLAN.md`, so the middleware must accept it. Function docstring documents the precedence. 3-line additive change; no upstream behaviour altered.
+4. **Ruff-format normalisation**: the first `ruff format` run on import collapsed upstream's aligned-colon dict literals (e.g. `_METHOD_ALIASES`, `_ROLE_ALIASES`, `_STATE_MAP` in `logging_utils.py` and similar in `middleware.py`). Upstream syncs will therefore show spurious whitespace diffs. When pulling from upstream, reapply `ruff format` immediately to normalise before eyeballing semantic changes. Keeping `po_base/` out of `ruff format` was considered and rejected: the formatter-drift noise is one-shot and disappears after each sync step, whereas split formatting config complicates every future PR forever.
+5. Our own `agent.py`, `app.py`, `__init__.py` — not copied from upstream, just follow the same API.
 
 ## When upstream updates
 

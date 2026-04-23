@@ -81,6 +81,18 @@ warn_unused_configs = true
 disallow_untyped_defs = true
 plugins = ["pydantic.mypy"]
 
+# Upstream reference code (copied from prompt-opinion/po-adk-python). Mirrors
+# the ruff per-file-ignore above; our own code stays strictly typechecked.
+# See a2a_agent/REFERENCE.md.
+[[tool.mypy.overrides]]
+module = "a2a_agent.po_base.*"
+ignore_errors = true
+
+# Upstream libraries without bundled type stubs.
+[[tool.mypy.overrides]]
+module = ["a2a.*", "google.adk.*", "dotenv"]
+ignore_missing_imports = true
+
 [tool.pytest.ini_options]
 asyncio_mode = "auto"
 testpaths = ["tests"]
