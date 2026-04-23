@@ -71,3 +71,7 @@ demo/generated/
 
 # ngrok
 ngrok.yml
+
+# Local scratch files (research prompts, notes that aren't committed artifacts)
+medical_research_prompt.md
+*.scratch.md
