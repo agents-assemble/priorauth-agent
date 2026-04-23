@@ -1,0 +1,33 @@
+services:
+  mcp:
+    build:
+      context: .
+      dockerfile: mcp_server/Dockerfile
+    env_file: .env
+    environment:
+      MCP_HOST: 0.0.0.0
+      MCP_PORT: 8000
+    ports:
+      - "8000:8000"
+    volumes:
+      - ./shared:/app/shared:ro
+      - ./mcp_server:/app/mcp_server
+    restart: unless-stopped
+
+  a2a:
+    build:
+      context: .
+      dockerfile: a2a_agent/Dockerfile
+    env_file: .env
+    environment:
+      A2A_HOST: 0.0.0.0
+      A2A_PORT: 8001
+      MCP_SERVER_URL: http://mcp:8000
+    ports:
+      - "8001:8001"
+    depends_on:
+      - mcp
+    volumes:
+      - ./shared:/app/shared:ro
+      - ./a2a_agent:/app/a2a_agent
+    restart: unless-stopped

@@ -1,0 +1,73 @@
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+.venv/
+venv/
+env/
+build/
+develop-eggs/
+dist/
+downloads/
+eggs/
+.eggs/
+lib/
+lib64/
+parts/
+sdist/
+var/
+wheels/
+*.egg-info/
+.installed.cfg
+*.egg
+MANIFEST
+
+# Environment
+.env
+.env.local
+.env.*.local
+
+# IDE
+.idea/
+.vscode/
+!.vscode/extensions.json
+*.swp
+*.swo
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Tests + coverage
+.pytest_cache/
+.coverage
+htmlcov/
+.mypy_cache/
+.ruff_cache/
+.tox/
+coverage.xml
+*.cover
+
+# Logs
+*.log
+logs/
+
+# Secrets
+*.pem
+*.key
+secrets/
+
+# Build artifacts
+*.egg-info/
+.eggs/
+
+# Fly.io
+fly.toml.bak
+
+# Demo / local FHIR data
+demo/generated/
+
+# ngrok
+ngrok.yml
