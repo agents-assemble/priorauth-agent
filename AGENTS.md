@@ -67,6 +67,7 @@ Any cross-service type lives in `shared/` **only**. This includes `PatientContex
 
 - **Conventional Commits**: `feat(mcp): ...`, `fix(a2a): ...`, `chore(shared): ...`, `docs: ...`, `test(mcp): ...`, `refactor(a2a): ...`.
 - PRs are **≤ 400 changed lines**. If larger, split into smaller sequential PRs.
+  - **Exception — vendored / adapted-upstream code**: lines copied or adapted from an attributed upstream reference do not count toward the 400-line cap, **provided** the adapted files are listed in a `REFERENCE.md` at the package root with the upstream commit pin and a per-file adaptation log (see `a2a_agent/po_base/REFERENCE.md` and `mcp_server/REFERENCE.md` for the shape). **Net-new authored code in the same PR must still fit under 400 lines.** This carve-out is auditable (grep the REFERENCE.md line count vs. the PR diff) so it cannot be gamed.
 - **Never delete or skip a test to make CI green.** If a golden file must change, explain why in the PR body.
 - Every PR must append an entry to `STATUS.md` if it blocks or unblocks something for the other human.
 

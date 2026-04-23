@@ -8,6 +8,22 @@ Newest entries at the top. Link to specific PO docs / support threads / Discord 
 
 ---
 
+## 2026-04-23 — SHARP JWT trust model: we don't verify, FHIR server does
+
+**Context**: Writing `get_patient_id_if_context_exists` in `mcp_server/fhir/context.py` and deciding how to extract the `patient` claim from the `x-fhir-access-token` header.
+
+**Observation**: Upstream (`po-community-mcp/python/fhir_utilities.py`) decodes the token with `jwt.decode(..., options={"verify_signature": False})` and uses the `patient` claim for FHIR lookups without signature verification. At first glance this looks broken — anyone could forge a JWT with an arbitrary `patient` claim and read another patient's context.
+
+**Why it's actually fine**: The security boundary is not at our MCP layer — it's at the **next hop**, the FHIR server. When our `FhirClient` forwards the same token as `Authorization: Bearer <token>`, the FHIR server re-authorizes against its own JWKS (which it owns and rotates) and rejects forged tokens and mismatched-`patient`-claim tokens. Our layer only uses the decoded claim for **routing** — which patient id to scope the FHIR search to. Any authorization decision still lands on the FHIR server.
+
+**Assumption we're inheriting**: the PO workspace FHIR is correctly configured to enforce `patient` claim matching. If that ever stops holding (dev FHIR with auth off, misconfigured workspace, a FHIR proxy that strips the token), a caller could spoof the claim. Worth surfacing to the PO team the first time we test against a non-sandbox workspace.
+
+**Why we can't verify at this layer**: public keys rotate per PO workspace and we don't own the JWKS endpoint. Adding verification here would be a second, weaker authorization point that duplicates the FHIR server's work and introduces drift risk (our JWKS cache vs. theirs).
+
+**Source**: `mcp_server/fhir/context.py::get_patient_id_if_context_exists` docstring; this note is cross-referenced from there. PR #3 review thread (Sanjit) asked for this to be explicit.
+
+---
+
 ## 2026-04-23 — FastMCP capability extensions require `get_capabilities` monkeypatch
 
 **Context**: Scaffolding `mcp_server/` and needing to advertise the `ai.promptopinion/fhir-context` extension (the custom capability key PO's registration UI looks for to know we accept SHARP-propagated FHIR tokens).

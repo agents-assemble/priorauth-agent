@@ -18,12 +18,11 @@ This file is intentionally Week-1-scaffold tier:
   "Demo Data Strategy" section. Any unknown patient_id raises
   FhirContextError so the error path is exercised too.
 
-Signature note: this tool takes flat `Annotated[str, Field(...)]` args
-rather than a shared.models BaseModel input wrapper - MCP renders the JSON
-schema directly from the signature and nested wrappers degrade the schema
-ergonomics. `.cursor/rules/mcp-server.md` currently says "accepts a Pydantic
-input model"; this is flagged in STATUS.md as something to reconcile in a
-follow-up rule update.
+Signature note: flat `Annotated[str, Field(...)]` args per the tool
+contract in `.cursor/rules/mcp-server.md` - FastMCP generates the tool's
+JSON schema directly from the signature, and nested Pydantic wrappers
+add a `$ref` indirection + extra object layer that degrades the schema
+ergonomics on both Claude Desktop and the PO workspace UI.
 """
 
 from __future__ import annotations

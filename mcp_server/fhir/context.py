@@ -79,6 +79,24 @@ def get_patient_id_if_context_exists(ctx: McpContext) -> str | None:
 
     Returns None if neither is available — the tool should then decide
     whether that is a hard error (Week-2 path) or a demo fallback (Week-1).
+
+    TRUST MODEL — important:
+      We decode the SHARP token with `verify_signature=False`. We do not
+      verify, and never can verify, the token at this layer — the public
+      keys rotate per PO workspace and we do not own the JWKS endpoint.
+      The security boundary is the **next hop**: when `FhirClient` sends
+      the token to the FHIR server as `Authorization: Bearer <token>`,
+      the FHIR server re-authorizes the request against its own JWKS and
+      rejects forged or mismatched-`patient`-claim tokens. So the only
+      thing we use the decoded claim for is *routing* (which patient id
+      to scope the FHIR search to) — any authorization decision still
+      lands on the FHIR server.
+
+      This depends on the PO workspace FHIR being correctly configured
+      to enforce `patient` claim matching. If that assumption is ever
+      violated (misconfigured workspace, dev FHIR with auth disabled),
+      a caller could spoof the `patient` claim to read another patient's
+      context. Surfaced in `docs/po_platform_notes.md`.
     """
     req = ctx.request_context.request
     if req is None:

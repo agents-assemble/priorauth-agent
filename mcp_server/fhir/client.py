@@ -95,8 +95,10 @@ class FhirClient:
                     await asyncio.sleep(delay)
                     continue
                 raise
-        # Unreachable — raise in the loop above exhausts retries — but keeps mypy happy.
-        raise last_exc  # type: ignore[misc]
+        # Unreachable — the final iteration's `raise` exits the loop. Assert-narrow
+        # to satisfy mypy strict without the `type: ignore` the upstream ref uses.
+        assert last_exc is not None
+        raise last_exc
 
     async def read(self, path: str) -> dict[str, Any] | None:
         """Single-resource read, e.g. `read("Patient/123")`."""

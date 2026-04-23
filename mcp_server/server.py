@@ -5,34 +5,20 @@ FastMCP construction, same `ai.promptopinion/fhir-context` capability
 extension monkeypatch (so PO's agent registration UI knows our server wants
 the SHARP FHIR context propagated on every call).
 
-Scope list is aligned with the A2A agent card declared in
-`a2a_agent/app.py::fhir_scopes` — PO needs both the A2A agent's card AND
-the MCP server's capabilities to declare the same scopes, otherwise the
-workspace UI filters to the intersection and silently drops resources.
-Cross-reference `.cursor/rules/mcp-server.md` "Scopes" section when adding
-resources to either side.
+Scope list is imported from `shared.fhir_scopes.FHIR_SCOPES` — the same
+tuple is advertised by the A2A agent card (`a2a_agent/app.py`). PO's
+workspace filters to the intersection of the two declarations, so drift
+would silently drop resources from every tool call.
 """
 
 from __future__ import annotations
 
-from collections.abc import Sequence
 from typing import Any
 
 from mcp.server.fastmcp import FastMCP
+from shared.fhir_scopes import FHIR_SCOPES
 
 from mcp_server.tools.fetch_patient_context import fetch_patient_context
-
-# Kept in one place so tests can assert alignment with the A2A agent card.
-FHIR_SCOPES: Sequence[dict[str, Any]] = (
-    {"name": "patient/Patient.rs", "required": True},
-    {"name": "patient/Condition.rs", "required": True},
-    {"name": "patient/MedicationRequest.rs", "required": True},
-    {"name": "patient/Observation.rs", "required": True},
-    {"name": "patient/ServiceRequest.rs", "required": True},
-    {"name": "patient/Coverage.rs", "required": True},
-    {"name": "patient/Procedure.rs", "required": False},
-    {"name": "patient/DocumentReference.rs", "required": False},
-)
 
 
 def _patch_capabilities(mcp: FastMCP) -> None:

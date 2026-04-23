@@ -19,9 +19,10 @@ Owner: Person A (Kevin). Person B reviews PRs here but does not drive.
 
 Each tool:
 
-- Accepts a Pydantic input model from `shared.models`.
-- Returns a Pydantic output model from `shared.models`.
-- Is registered in `mcp_server/server.py` via FastMCP.
+- Takes flat `Annotated[T, Field(description=...)]` parameters — one per logical argument — rather than a single nested Pydantic input model. Rationale: FastMCP generates each tool's JSON schema directly from the function signature, and a nested `BaseModel` wrapper introduces a `$ref` indirection + an extra object layer that degrades the schema ergonomics for MCP clients (verified 2026-04-23 against Claude Desktop and PO's workspace UI — both render flat args as individual form fields, nested models as a single blob). Each argument's `Field(description=...)` becomes the parameter's `description` in the generated schema, so descriptions must be written for the MCP client (not a Python consumer).
+  - **Exception**: when an argument is intrinsically a structured record (e.g. a list of criteria rows, a nested coverage object), define it in `shared.models` and annotate the parameter with that model. The rule above applies to simple scalar/list args only, which is the common case for the three Week-2 tools.
+- Returns a Pydantic output model from `shared.models`. Complex return types are always wrapped — FastMCP's structured-content surface renders them cleanly on the client side.
+- Is registered in `mcp_server/server.py` via FastMCP with `name=` and `description=` kwargs (the description is what shows up in the MCP client's tool picker).
 - Has a golden-file test in `tests/mcp_server/` covering all 3 demo patients.
 
 ## Payer criteria JSON
