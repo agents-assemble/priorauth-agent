@@ -38,8 +38,20 @@ jobs:
 
       - name: Mypy typecheck
         run: uv run mypy shared mcp_server a2a_agent
-        continue-on-error: true  # Relax during early scaffold; tighten when modules exist.
 
+      # Treat pytest exit code 5 ("no tests collected") as benign so the
+      # marker filter + sparse-test-directory combinations that happen
+      # between scaffold PRs do not break CI. Any real failure (exit 1+)
+      # still fails the job. Drop the wrapper once every service directory
+      # has at least one test that the filter always matches.
       - name: Pytest (fast)
-        run: uv run pytest -m "not llm and not integration" -v
-        continue-on-error: true  # Relax during early scaffold.
+        shell: bash
+        run: |
+          set +e
+          uv run pytest -m "not llm and not integration" -v
+          status=$?
+          if [ $status -eq 5 ]; then
+            echo "::warning::pytest collected zero tests; treating as success during scaffold"
+            exit 0
+          fi
+          exit $status
