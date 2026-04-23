@@ -54,7 +54,7 @@ There is no explicit adult age cutoff for the adult Spine Imaging Guidelines; pe
 
 - **Policy title**: Magnetic Resonance Imaging (MRI) and Computed Tomography (CT) of the Spine — Aetna Clinical Policy Bulletin 0236 ([Source](https://es.aetna.com/cpb/medical/data/200_299/0236.html))
 - **Version / effective date**: The publicly mirrored version of CPB 0236 does not display a single "last reviewed" date stamp in the retrieved HTML, but the reference list includes citations as recent as 2025 (ACR Appropriateness Criteria Acute Spinal Trauma 2024 update published 2025; Ma 2025; Michael 2025) and an "Accessed February 6, 2026" note in one reference, indicating the policy has been updated into early 2026 ([Source](https://es.aetna.com/cpb/medical/data/200_299/0236.html)).
-- **Source URL (primary)**: https://www.aetna.com/cpb/medical/data/200_299/0236.html — the canonical www host returned an Incapsula bot-challenge error during this session; the es.aetna.com mirror served identical policy text and was used for extraction ([Source](https://es.aetna.com/cpb/medical/data/200_299/0236.html)).
+- **Source URL (primary)**: https://www.aetna.com/cpb/medical/data/200_299/0236.html — verified accessible from a normal (non-bot) browser session on 2026-04-23 (see [verification log](#aetna-canonical-url-verification-log) at end of doc). During the original automated research session this URL returned an Incapsula bot-challenge; subsequent manual verification confirmed the canonical www URL serves identical policy content to the `es.aetna.com` mirror that was used for extraction. **JSON encoding will use this canonical URL as `source_policy_url`.**
 - **Cross-reference**: CPB 0743 (Spinal Surgery: Laminectomy and Fusion) was reviewed via search snippets; it governs surgical indications  and refers back to imaging policies rather than re-stating MRI medical-necessity criteria ([Source](https://www.aetna.com/cpb/medical/data/700_799/0743.html)).
 - **Last verified**: 2026-04-23
 
@@ -93,7 +93,11 @@ The medical-necessity list in CPB 0236 is structured as an "any one of the follo
 - **Suspected transverse myelitis** — ICD: G37.3; likely note phrases: "sensory level," "acute myelopathy."
 
 ### 5. Age / diagnosis gating
-CPB 0236 does not specify an age cutoff (adult vs. pediatric) for MRI medical necessity. The policy includes a detailed ICD-10 code table that lists covered diagnoses. Covered codes relevant to lumbar MRI include G83.4 (cauda equina syndrome), M48.00–M48.08 (spinal stenosis), M50.x/M51.x (intervertebral disc disorders), M54.10–M54.18 (radiculopathy/neuritis), M54.30–M54.32 (sciatica), M54.9 (dorsalgia unspecified), C79.51–C79.52 (secondary bone malignancy), M46.2x (osteomyelitis of vertebra), S32.0xx (lumbar vertebral fracture), Q05.x/Q06.x (spina bifida/congenital cord malformations), and related trauma and infection codes. Explicit exclusions (ICD-10 codes not covered) include Z01.818 and Z01.89 (preprocedural/other special exam), Z12.x (screening for malignancy), and Z08 (follow-up after completed malignancy treatment) — i.e., purely screening and asymptomatic surveillance encounters are not covered. CPB 0236 also deems "dynamic-kinetic MRI" of the cervical spine experimental/investigational and routine MRI after a normal cervical CT in obtunded/comatose patients not medically necessary ([Source](https://es.aetna.com/cpb/medical/data/200_299/0236.html)).
+CPB 0236 does not specify an age cutoff (adult vs. pediatric) for MRI medical necessity. The policy includes a detailed ICD-10 code table that lists covered diagnoses. Covered codes relevant to lumbar MRI include G83.4 (cauda equina syndrome), M48.00–M48.08 (spinal stenosis), M50.x/M51.x (intervertebral disc disorders), M54.10–M54.18 (radiculopathy/neuritis), M54.30–M54.32 (sciatica), M54.9 (dorsalgia unspecified), C79.51–C79.52 (secondary bone malignancy), M46.2x (osteomyelitis of vertebra), S32.0xx (lumbar vertebral fracture), Q05.x/Q06.x (spina bifida/congenital cord malformations), and related trauma and infection codes ([Source](https://www.aetna.com/cpb/medical/data/200_299/0236.html)).
+
+**Correction (2026-04-23 verification pass)**: the only ICD-10 exclusion under the **main** CPB 0236 medical-necessity section is `R40.20–R40.2444` (Coma), and that exclusion is scoped specifically to "routine MRI after a normal CT of the cervical spine" — not a general lumbar MRI exclusion. There is **no** explicit ICD-10 exclusion in the main policy for screening (`Z12.x`), preprocedural exams (`Z01.818`/`Z01.89`), follow-up after completed cancer treatment (`Z08`), or personal/family cancer history (`Z80.x`/`Z85.x`). Those Z-codes are listed only under the **BoneMRI** experimental/investigational subsection (i.e., they're excluded for synthetic-CT-from-MRI, not for conventional MRI of the lumbar spine). For CPT 72148 specifically, screening / asymptomatic surveillance is excluded *implicitly* by the requirement that one of the medical-necessity bullets be met, not *explicitly* via a Z-code disqualifier. The original research session's §5 paraphrase incorrectly attributed the BoneMRI Z-code exclusions to the main CPB 0236 policy; this paragraph is the corrected reading ([Source](https://www.aetna.com/cpb/medical/data/200_299/0236.html)).
+
+CPB 0236 also deems "dynamic-kinetic MRI" of the cervical spine experimental/investigational and routine MRI after a normal cervical CT in obtunded/comatose patients not medically necessary ([Source](https://www.aetna.com/cpb/medical/data/200_299/0236.html)).
 
 ### Other rules (if any)
 - All other indications for spine MRI/CT are considered experimental, investigational, or unproven because clinical value has not been established; the policy text explicitly cites AHCPR, ACP, AAFP, and NASS recommendations against routine imaging for acute non-specific low back pain ([Source](https://es.aetna.com/cpb/medical/data/200_299/0236.html)).
@@ -167,12 +171,48 @@ CPB 0236 does not specify an age cutoff (adult vs. pediatric) for MRI medical ne
 
 ## Source integrity notes
 
-- The canonical Aetna URL `https://www.aetna.com/cpb/medical/data/200_299/0236.html` returned an Incapsula bot-challenge page (incident ID 1345000620024825391-18399296386830212) during direct fetching on 2026-04-23. The equivalent policy text was retrieved from Aetna's Spanish-portal mirror `https://es.aetna.com/cpb/medical/data/200_299/0236.html`, which served identical English-language policy content (Aetna's es. portal hosts English CPBs for Spanish-speaking user entry). Confirm that the mirrored content is identical to the canonical URL on a future verification pass.
+- The canonical Aetna URL `https://www.aetna.com/cpb/medical/data/200_299/0236.html` returned an Incapsula bot-challenge page (incident ID 1345000620024825391-18399296386830212) during direct fetching on 2026-04-23. The equivalent policy text was retrieved from Aetna's Spanish-portal mirror `https://es.aetna.com/cpb/medical/data/200_299/0236.html`, which served identical English-language policy content (Aetna's es. portal hosts English CPBs for Spanish-speaking user entry).
+  - **Update 2026-04-23 (post manual verification)**: canonical www URL re-fetched from a non-bot-blocked browser session and confirmed to serve the same policy content as the mirror. The es.aetna.com fallback citation is no longer needed; JSON encoding will use the canonical www URL as `source_policy_url`. Full verification log including spot-check results lives in the [Aetna canonical-URL verification log](#aetna-canonical-url-verification-log) section below.
 - Aetna CPB 0236 does not display an explicit "Last reviewed" date stamp in the retrieved HTML; recency was inferred from the reference list (most recent citations dated 2025 and an "Accessed February 6, 2026" reference). Engineer should treat the policy date as "unknown exact, recent as of early 2026."
 - The eviCore V1.0.2026 PDF is large (~205 KB text-extracted); a single-call fetch exceeded the tool's 200 KB cap. A second fetch with a higher text-content token limit succeeded in returning the full Spine Imaging Guidelines through section SP-10 (Sacro-Iliac Joint Pain/Fibromyalgia) including all lumbar-relevant sections SP-1 through SP-6, which are the sections needed for this task.
 - The ACR `acsearch.acr.org/docs/69483/narrative/` page renders as a Preview with the rating tables and variant definitions in full, but the narrative discussion per variant/procedure shows only headings in the extracted markdown (the narrative body is rendered dynamically). Variant tables, panel member list, references, and appropriateness categories are complete; per-procedure prose discussion was not captured and was not needed for the extraction.
 - No Wayback Machine fallback was used because primary sources all resolved.
 - CPB 0743 (Aetna Spinal Surgery) was verified via search snippets; the full text was not re-fetched because CPB 0743 addresses surgical medical necessity and does not restate MRI-specific thresholds. CPB 0016 (Back Pain Invasive Procedures) was surfaced in passing and confirms Aetna's use of a 6-week conservative-therapy threshold for injection procedures, consistent with CPB 0236's radiculopathy threshold.
+
+---
+
+## Aetna canonical-URL verification log
+
+Closes [PR #6 review note #2](https://github.com/agents-assemble/priorauth-agent/pull/6#pullrequestreview-4166440051).
+
+- **Verified by**: Kevin Shine George (`@kevinsgeo`), 2026-04-23
+- **URL**: https://www.aetna.com/cpb/medical/data/200_299/0236.html
+- **Loaded from**: normal browser session (no Incapsula bot-detection challenge encountered)
+- **Policy number on page**: 0236 — confirmed
+- **Last review date displayed**: not shown on the page (consistent with the source integrity note above; recency inferred from references including 2025 publications: Expert Panel on Neurological Imaging 2025, Ma 2025, Michael 2025, plus Iwasaka-Neder 2024, Schiettecatte 2024, Willesen 2024, Krabbe 2024)
+
+### Spot-check results
+
+| # | Expected (from research doc) | Observed (live page) | Result |
+|---|---|---|---|
+| A | 6-week threshold for radiculopathy + 4-week threshold for spondylolisthesis/DDD | "no improvement after 6 weeks of conservative therapy" (radiculopathy bullet); "has not responded to 4 weeks of conservative therapy" (spondylolisthesis bullet) | **PRESENT — matches** |
+| B | 4-item conservative-therapy footnote: moderate activity, analgesics, NSAIDs, muscle relaxants | Verbatim: *"Conservative therapy = moderate activity, analgesics, non-steroidal anti-inflammatory drugs, muscle relaxants."* | **PRESENT — matches verbatim** |
+| C | "Any one of the following" OR-semantics on the medical-necessity list | Verbatim: *"Aetna considers magnetic resonance imaging (MRI) and computed tomography (CT) of the spine medically necessary when any of the following criteria is met"* | **PRESENT — matches** |
+| D | 2024/2025-era experimental/investigational items: BoneMRI, dynamic-kinetic MRI, dual-energy CT for bone marrow edema | All three present, plus the "MRI after normal cervical CT in obtunded/comatose" not-medically-necessary item that was already captured in the doc | **PRESENT — matches** |
+
+### Cross-check against research doc
+
+- **Red-flag taxonomy**: 17 items in the research doc (lines ~77–93) match 17 of the 19 medical-necessity bullets on the live page; the 2 not in the red-flag section are the conditional bullets (radiculopathy with 6wk and spondylolisthesis with 4wk) which are correctly captured in §1 (conservative-care duration). All 17 paraphrased red-flag conditions present verbatim or with minor restructuring on the live page. **Match.**
+- **Covered ICD-10 codes**: spot-checked G83.4, M48.00–M48.08, M50.x/M51.x, M54.10–M54.18, C79.51–C79.52, M46.20–M46.39, Q05.0–Q05.9 — all present on the live page. **Match.**
+- **ICD-10 exclusions**: **discrepancy found**. Original §5 implied `Z01.818`, `Z01.89`, `Z12.x`, `Z08` are broad CPB 0236 exclusions; live page scopes those Z-codes only to the **BoneMRI** experimental/investigational subsection. The only ICD-10 exclusion under the main lumbar MRI policy is `R40.20–R40.2444` (Coma), and that is further scoped to "routine MRI after normal cervical CT" (not all lumbar MRI). **§5 corrected in this commit.** Practical impact for the JSON encoding: cannot cite Z-code exclusions as Aetna 0236 explicit lumbar MRI disqualifiers — screening / asymptomatic surveillance is excluded implicitly via the medical-necessity-list requirement, not via an explicit code list. The error did not affect the rest of §5 or any other section.
+- **Related Policies list**: live page lists CPB 0093, 0105, 0171, 0202, 0228, 0520. Research doc cross-references CPB 0743 and CPB 0016 — neither appears in CPB 0236's "Related Policies" header, but both contain *content* that intersects with lumbar MRI workups (CPB 0743 surgical criteria, CPB 0016 conservative-therapy thresholds for injections). The doc's cross-reference is by content not by Aetna's own classification; non-issue.
+
+### Decision
+
+- **Result**: **CONFIRMED — cite `https://www.aetna.com/cpb/medical/data/200_299/0236.html` as `source_policy_url`** in `aetna_lumbar_mri.json`.
+- **Factual corrections landed in this commit**: Aetna §5 ICD-10 exclusions scope; Aetna section header; source integrity notes.
+- **No other discrepancies** between the research doc and the live page on 2026-04-23.
+- **es.aetna.com fallback citation**: no longer needed; will not appear in the JSON or in any future criteria documentation.
 
 ---
 
