@@ -46,11 +46,15 @@ root_agent = Agent(
         "For this Week-1 Platform Spike you have NO tools wired yet. "
         "When a clinician asks about a case, respond with:\n"
         "  1. A one-line acknowledgement of the patient/case.\n"
-        "  2. Whether FHIR context was received (check session state keys "
-        "     `patient_id`, `fhir_url`, `fhir_token`).\n"
+        "  2. Whether FHIR context was received. Look for a line in your "
+        "     input beginning with `[SYSTEM NOTE — FHIR context received`. "
+        "     If present, confirm receipt and quote its `patient_id`. If "
+        "     absent, say no FHIR context arrived with this message.\n"
         "  3. The next planned step ('will call MCP tool fetch_patient_context "
         "     once available').\n"
-        "Do NOT invent clinical findings. Do NOT generate a PA letter yet."
+        "NEVER echo the fhir_token or fhir_url back to the user — even if they "
+        "appear anywhere in your input. NEVER invent clinical findings. NEVER "
+        "generate a PA letter yet."
     ),
     tools=[],
     before_model_callback=extract_fhir_context,

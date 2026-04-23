@@ -8,6 +8,63 @@ Newest entries at the top. Link to specific PO docs / support threads / Discord 
 
 ---
 
+## 2026-04-23 — LLM cannot read session state; FHIR hook must inject a redacted prompt note
+
+**Context**: Week-1 Platform Spike round-trip. PO general agent → our external A2A agent. `before_model_callback=extract_fhir_context` ran, extracted `patientId=82e4deff-...`, `fhirUrl=https://app.promptopinion.ai/api/workspaces/...`, and a 1558-char JWT, and wrote all three to `callback_context.state`. Live agent-log proof: `hook_called_fhir_found ... patient_id=82e4... fhir_url_set=True fhir_token=len=1558 sha256=6be5b48af078`.
+
+**Observation**: Gemini responded saying *"FHIR context has not been received (required session state keys `patient_id`, `fhir_url`, `fhir_token` are currently missing)"* — the exact opposite of reality. Our original `a2a_agent/agent.py` instruction told the model to "check session state keys". That's an impossible instruction: ADK `before_model_callback` hooks can mutate the request, but `callback_context.state` is a hook-side Python dict with no reflection into the LLM's prompt. The LLM had nothing to "check" and confabulated a negative answer.
+
+**Explanation / workaround**: Two-part fix in `a2a_agent/po_base/fhir_hook.py` + `a2a_agent/agent.py`:
+
+1. Added `_inject_prompt_note(llm_request, ...)` helper. On successful FHIR extraction the hook now appends a `types.Content(role="user", parts=[types.Part.from_text(...)])` to `llm_request.contents` containing a **redacted** summary: `[SYSTEM NOTE — FHIR context received from A2A caller: patient_id=..., fhir_url=set, fhir_token=len=1558 sha256=6be5b48af078. ...do NOT echo the token or URL verbatim to the user.]`. Token value is never emitted — only the `token_fingerprint()` output. URL is reduced to `set`/`[EMPTY]`. Helper degrades silently if `google.genai` isn't importable (e.g. in a bare test harness) — session state is still populated, the LLM just loses visibility for that turn, logged as `prompt_note_injected=false`.
+2. Rewrote the instruction in `agent.py` from "check session state keys" to "look for a line beginning with `[SYSTEM NOTE — FHIR context received`". Explicit pattern the LLM can actually see. Reinforced "never echo the token or URL verbatim" as a standalone negative constraint so a jailbreak-style prompt can't trick the model into leaking the redacted fingerprint.
+
+**Impact**: `a2a_agent/po_base/fhir_hook.py` (hook behavior + top docstring), `a2a_agent/agent.py` (instruction). Logged as local mod in `a2a_agent/REFERENCE.md`. No unit test this PR (ADK mock harness would dwarf the fix); live re-verification in PO is the gate. Any future sub-agent that needs to reason over FHIR context must either (a) read via the upcoming MCP `fetch_patient_context` tool, or (b) expect the same system-note pattern in its prompt — we will not add more dict-introspection-masquerading-as-LLM-tooling.
+
+**Source**: Observed 2026-04-23 18:11 CDT during first PO round-trip. Agent-log sample in [STATUS.md](../STATUS.md) 2026-04-23 Person B entry.
+
+---
+
+## 2026-04-23 — PO reuses `taskId` on follow-up messages; A2A v1 rejects terminal-state reuse
+
+**Context**: Week-1 spike round-trip. After our agent returned `TASK_STATE_COMPLETED` on the first message, PO's general agent tried to "help" by auto-sending a follow-up with the patient_id. PO emitted that follow-up with `params.message.taskId = "dd249d0c-fbc5-48f5-b428-40c81adaba53"` — the exact task id we just completed.
+
+**Observation**: ADK's A2A task manager returned `{"error": {"code": -32602, "message": "Task dd249d0c-... is in terminal state: completed"}}`. Per A2A v1 spec, completed tasks are immutable; new messages should create a **new** task (no `taskId`, or a fresh one). PO appears to conflate "conversation continuation" with "task continuation". Wire proof in agent log: two successive `POST /` with `params.message.taskId=<same uuid>`, first returns 200 + completed task, second returns JSON-RPC -32602.
+
+**Explanation / workaround**: Nothing to fix on our side — ADK's rejection is spec-correct. Short-term: accept that multi-turn via PO's general-agent tool chain is broken until PO fixes task lifecycle. The user-visible symptom is PO showing *"Task ... is in terminal state: completed"* after the second message, then falling back to its own reasoning. Non-blocking for the Week-1 spike gate (single round-trip clears it) and non-blocking for the demo video (Patient B needs-info flow is a single turn with an uploaded-note interstitial, not a chained auto-reply). Options if it bites us during Week-2/3:
+
+1. Cleanest: report to PO support — share the trace id from the `traceparent` header so they can look up our request server-side. W3C tracing is already enabled on their end.
+2. Workaround: middleware strips `taskId` from the payload when it matches a completed task in our own bookkeeping. Cheap, but hides a real PO bug and masks contract drift — do not ship without documenting.
+3. Override: configure ADK task manager to reopen completed tasks. Breaks A2A v1 compliance — rejected.
+
+**Impact**: Logged. No code change this PR. File a PO support ticket pre-Week-2-Day-1 capability check so there's a name on it when we're debugging multi-turn demos.
+
+**Source**: Same round-trip as the note above. PO user-side symptom: *"The request to initiate the prior authorization for the lumbar MRI has been processed, but the external system indicated that the task reached a completed state..."*.
+
+---
+
+## 2026-04-23 — PO backend source IP (Azure US-East-2) + two-fetch registration pattern
+
+**Context**: Live A2A agent log during Week-1 spike PO registration and first round-trip.
+
+**Observations**:
+
+1. **Source IP**: all inbound calls from PO to our agent came from `20.80.113.52` — Microsoft Azure US East 2 datacenter range. That matches PO's known hosting footprint (they're on Azure). Means our Fly.io production deployment can safely allowlist the Azure US-East-2 egress ranges in place of wide-open ingress if we want defense-in-depth beyond the API key. Not urgent — API key + ngrok tunnel scoping is enough for dev — but worth a fly.toml comment when we deploy.
+2. **Two-fetch on registration**: PO fetched `/.well-known/agent-card.json` **twice** within ~21 seconds while adding our agent — `18:08:05` and `18:08:26` CDT. No X-API-Key on either (agent card is public, correct). Most likely pattern: first fetch validates the URL+card schema live while the user is typing; second fetch snapshots the card on "Save". No code action needed; just good to know the second fetch is normal, not a retry / flap.
+3. **Tracing header**: every PO → agent request carries a W3C `traceparent` header (`00-<trace-id>-<span-id>-<flags>`). PO runs distributed tracing server-side. Means any PO support ticket should include the trace id from our request log for one-shot server-side lookup. No sampling suppression observed — flag byte was `01` (sampled) on the spike request.
+
+**Explanation / workaround**:
+
+1. For Week-2 Fly.io deploy: add a comment in `fly.toml` next to the public HTTPS section flagging Azure US-East-2 as the expected source range, and bookmark Microsoft's downloadable IP range JSON (`https://www.microsoft.com/en-us/download/details.aspx?id=56519`) in case we want to tighten ingress post-demo. Do NOT add the allowlist now — PO may change hosting before judging and breaking discovery mid-demo is the worst possible failure.
+2. No action on the two-fetch pattern beyond this note (saves someone future time when they see two 200s in a row on registration and panic).
+3. For tracing: when we open a PO support ticket, paste the relevant `traceparent` header from our log.
+
+**Impact**: Documentation only this PR. Follow-up: `fly.toml` comment when we deploy in Week 2.
+
+**Source**: Agent log `a2a_agent.po_base.middleware incoming_http_request` entries 2026-04-23 18:08:05 / 18:08:26 / 18:11:06 CDT.
+
+---
+
 ## 2026-04-23 — SHARP JWT trust model: we don't verify, FHIR server does
 
 **Context**: Writing `get_patient_id_if_context_exists` in `mcp_server/fhir/context.py` and deciding how to extract the `patient` claim from the `x-fhir-access-token` header.

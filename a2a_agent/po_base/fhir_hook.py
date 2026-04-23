@@ -1,11 +1,22 @@
 """
 FHIR context hook — ADK before_model_callback.
 
-When an A2A caller sends FHIR credentials in the message metadata, this hook
-extracts them and stores them in session state so that tools can use them at
-call time without the credentials ever appearing in the prompt text.
+When an A2A caller sends FHIR credentials in the message metadata, this hook:
+
+1. Extracts the credentials from any of the candidate metadata locations
+   ADK exposes and writes them to ``callback_context.state``. Tools can read
+   them at call time without the credentials ever appearing in the prompt.
+2. Appends a **redacted** system-style note to ``llm_request.contents`` so
+   the LLM can accurately report whether FHIR context arrived. The LLM has
+   no introspection into ``callback_context.state``, so without this
+   injection an instruction that asks it to "confirm FHIR receipt" causes
+   confabulation (observed 2026-04-23 during the PO Week-1 spike round-trip
+   — see ``docs/po_platform_notes.md`` "LLM cannot read session state").
+   The injected note never contains the raw token — only a length + SHA256
+   fingerprint from :func:`token_fingerprint`.
 
 Metadata key convention (must match the AgentExtension URI in app.py):
+
     "http://<host>/schemas/a2a/v1/fhir-context": {
         "fhirUrl":   "https://fhir.example.org",
         "fhirToken": "<bearer-token>",
@@ -19,6 +30,7 @@ callback_context objects to the log (useful when developing a new integration).
 import json
 import logging
 import os
+from typing import Any
 
 from a2a_agent.po_base.logging_utils import safe_pretty_json, serialize_for_log, token_fingerprint
 
@@ -97,6 +109,50 @@ def _extract_metadata_sources(callback_context, llm_request) -> list:
     ]
 
 
+def _inject_prompt_note(
+    llm_request: Any,
+    *,
+    patient_id: str,
+    fhir_url: str,
+    fhir_token_fingerprint: str,
+) -> bool:
+    """Append a redacted FHIR-context note to ``llm_request.contents``.
+
+    The LLM cannot read ``callback_context.state`` directly, so this is the
+    one-way channel for surfacing the fact that FHIR context was received.
+    Never includes the raw token — only the :func:`token_fingerprint` output.
+
+    Returns True on successful append, False on graceful degradation (e.g.
+    ``google.genai`` not importable in a test harness, unexpected
+    ``llm_request.contents`` shape). Failure is non-fatal: session state is
+    still populated and tools can proceed; the LLM just loses visibility for
+    that turn.
+    """
+    try:
+        from google.genai import types
+    except ImportError:
+        return False
+
+    contents = getattr(llm_request, "contents", None)
+    if contents is None or not hasattr(contents, "append"):
+        return False
+
+    note = (
+        "[SYSTEM NOTE — FHIR context received from A2A caller: "
+        f"patient_id={patient_id or '[EMPTY]'}, "
+        f"fhir_url={'set' if fhir_url else '[EMPTY]'}, "
+        f"fhir_token={fhir_token_fingerprint}. "
+        "Credentials are available to tools via session state; "
+        "do NOT echo the token or URL verbatim to the user.]"
+    )
+
+    try:
+        contents.append(types.Content(role="user", parts=[types.Part.from_text(text=note)]))
+    except (AttributeError, TypeError):
+        return False
+    return True
+
+
 # ── Public helper (also used by middleware) ────────────────────────────────────
 
 
@@ -130,8 +186,10 @@ def extract_fhir_context(callback_context, llm_request):
     ADK before_model_callback.
 
     Reads FHIR credentials from the A2A message metadata and writes them into
-    callback_context.state so that tools can call the FHIR server.
-    Returns None (does not modify the LLM request).
+    ``callback_context.state`` so that tools can call the FHIR server. Also
+    appends a redacted system-style note to ``llm_request.contents`` (via
+    :func:`_inject_prompt_note`) so the LLM can truthfully report receipt —
+    see module docstring for the rationale. Returns None regardless.
     """
     correlation = _safe_correlation_ids(callback_context, llm_request)
     metadata_sources = _extract_metadata_sources(callback_context, llm_request)
@@ -211,23 +269,28 @@ def extract_fhir_context(callback_context, llm_request):
         callback_context.state["fhir_url"] = fhir_data.get("fhirUrl", "")
         callback_context.state["fhir_token"] = fhir_data.get("fhirToken", "")
         callback_context.state["patient_id"] = fhir_data.get("patientId", "")
+        token_fp = token_fingerprint(callback_context.state["fhir_token"])
         logger.info("FHIR_URL_FOUND value=%s", callback_context.state["fhir_url"] or "[EMPTY]")
-        logger.info(
-            "FHIR_TOKEN_FOUND fingerprint=%s",
-            token_fingerprint(callback_context.state["fhir_token"]),
-        )
+        logger.info("FHIR_TOKEN_FOUND fingerprint=%s", token_fp)
         logger.info(
             "FHIR_PATIENT_FOUND value=%s", callback_context.state["patient_id"] or "[EMPTY]"
         )
+        prompt_note_injected = _inject_prompt_note(
+            llm_request,
+            patient_id=callback_context.state["patient_id"],
+            fhir_url=callback_context.state["fhir_url"],
+            fhir_token_fingerprint=token_fp,
+        )
         logger.info(
             "hook_called_fhir_found task_id=%s context_id=%s message_id=%s "
-            "patient_id=%s fhir_url_set=%s fhir_token=%s",
+            "patient_id=%s fhir_url_set=%s fhir_token=%s prompt_note_injected=%s",
             correlation["task_id"],
             correlation["context_id"],
             correlation["message_id"],
             callback_context.state["patient_id"],
             bool(callback_context.state["fhir_url"]),
-            token_fingerprint(callback_context.state["fhir_token"]),
+            token_fp,
+            prompt_note_injected,
         )
     else:
         logger.info(
