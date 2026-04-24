@@ -8,6 +8,30 @@ Newest entries at the top. Link to specific PO docs / support threads / Discord 
 
 ---
 
+## 2026-04-24 — MCP (:8000) and A2A (:8001) MUST be registered under distinct public hostnames
+
+**Context**: Registering both services in one PO workspace. The MCP server goes in the workspace Server Hub (`https://<host>/mcp`); the A2A agent goes in the External Agents UI as a base URL (no path). During Sanjit's Week-1 round-trip a single reserved ngrok hostname was accidentally pointed at both `:8000` and `:8001` — either via ad-hoc `ngrok http <port>` invocations reusing the same default hostname, or via the terminal UI briefly showing two forwarding lines with the same public host mapping to both ports.
+
+**Observation**: Symptoms from the one-host-two-ports misconfig:
+
+- `ngrok http 8001` after `ngrok http 8000` (or vice versa) when the authtoken pins a reserved hostname → `ERR_NGROK_334` on the second process.
+- If the race goes the other way, ngrok binds the reserved host to exactly one of the two upstreams (whichever process won). PO's other-service calls then land on the wrong app: the A2A agent card fetch (`GET /.well-known/agent-card.json`) comes back as an MCP 404, or PO's MCP `initialize` JSON-RPC hits the A2A agent and returns an unrelated payload.
+- One ngrok HTTPS endpoint maps to exactly one upstream. The `ngrok http` CLI does not support path-based routing on a single hostname across two local ports — if you need two services publicly reachable, you need two endpoints.
+
+**Explanation / workaround**: The initial fix attempted to use ngrok v3 multi-endpoint config (`ngrok.example.yml` with two `endpoints` blocks). This works on the **Personal** plan ($8/mo), but **fails on the free tier** — ngrok free only allows one online endpoint at a time. With two endpoints defined, ngrok silently collapses both onto the single reserved hostname, routing all traffic to one upstream and dropping the other. The terminal UI even shows two forwarding lines with the *same* hostname, which is misleading.
+
+**Final solution**: Use **two different tunnel tools** — one per service:
+- **ngrok** for the A2A agent (`:8001`) — `make ngrok`. Uses the reserved domain or a random hostname.
+- **Cloudflare Tunnel** (`cloudflared`) for the MCP server (`:8000`) — `make cf-tunnel`. Zero-config, no account, assigns a random `*.trycloudflare.com` hostname each run.
+
+This gives each service a distinct public URL at zero cost. `ngrok.example.yml` is simplified to a single A2A endpoint. The MCP's cloudflared URL changes every restart — re-register it in PO's Server Hub each session (copy `https://<random>.trycloudflare.com/mcp`). The A2A ngrok URL can be pinned via a reserved domain if available. Run `make tunnels` for the cheat-sheet.
+
+**Impact**: `ngrok.example.yml` (single A2A endpoint), `scripts/tunnels.ps1` (Windows: starts both tools). Makefile targets: `ngrok` (A2A), `cf-tunnel` (MCP), `tunnels` (help). Docs updated in `a2a_agent/README.md`, `mcp_server/README.md`, and `.env.example`. Rule of thumb: **one hostname per local port, always** — and on ngrok free, that means one hostname period, so the second service needs a different tool.
+
+**Source**: Observed 2026-04-24 during Kevin's follow-up on Sanjit's Week-1 spike report. GitHub issue [#17](https://github.com/agents-assemble/priorauth-agent/issues/17) has the original debug trace. ngrok free-tier endpoint limit confirmed by live test (both endpoints collapsed to one hostname). Cloudflare Tunnel quick-tunnel docs: [developers.cloudflare.com/cloudflare-one/connections/connect-networks/do-more-with-tunnels/trycloudflare/](https://developers.cloudflare.com/cloudflare-one/connections/connect-networks/do-more-with-tunnels/trycloudflare/).
+
+---
+
 ## 2026-04-23 — Workspace FHIR `updateCreate` is disabled → bundles must POST, not PUT
 
 **Context**: Week-1 import of `demo/patients/patient_a.json` (15-entry transaction bundle) into the PO workspace via the Patients → Import FHIR bundle UI. Every bundle entry shipped in PR #14 used `request.method: "PUT"` with a client-assigned id (`PUT /Patient/demo-patient-a`, `PUT /Condition/demo-patient-a-lbp-radic`, etc.) — the usual idempotent-re-seed shape.

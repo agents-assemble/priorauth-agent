@@ -3,7 +3,7 @@
 SHELL := /bin/sh
 .DEFAULT_GOAL := help
 
-.PHONY: help install dev stop agent mcp ngrok agent-card mcp-initialize mcp-fetch-patient check lint format typecheck test test-fast integration clean
+.PHONY: help install dev stop agent mcp ngrok cf-tunnel tunnels agent-card mcp-initialize mcp-fetch-patient check lint format typecheck test test-fast integration clean
 
 help: ## Show this help
 	@awk 'BEGIN {FS = ":.*##"; printf "\nUsage:\n  make \033[36m<target>\033[0m\n\nTargets:\n"} /^[a-zA-Z_-]+:.*?##/ { printf "  \033[36m%-15s\033[0m %s\n", $$1, $$2 }' $(MAKEFILE_LIST)
@@ -23,8 +23,24 @@ agent: ## Run the A2A agent locally on :8001 (reads .env)
 mcp: ## Run the MCP server locally on :8000 (reads .env)
 	uv run --package mcp_server uvicorn mcp_server.main:app --host 0.0.0.0 --port 8000 --log-level info --reload --env-file .env
 
-ngrok: ## Expose local :8001 via ngrok (requires NGROK_AUTHTOKEN in .env on first run)
-	ngrok http 8001
+ngrok: ## Expose A2A (:8001) via ngrok. Copy AGENT_PUBLIC_URL from the forwarding line into .env + restart agent.
+	@test -f ngrok.yml && ngrok start --all --config ngrok.yml || ngrok http 8001
+
+cf-tunnel: ## Expose MCP (:8000) via Cloudflare Tunnel. Copy the *.trycloudflare.com URL + /mcp into PO Server Hub.
+	cloudflared tunnel --url http://localhost:8000
+
+tunnels: ## Show how to start both tunnels (run each in its own terminal)
+	@echo ""
+	@echo "Start these in TWO separate terminals:"
+	@echo ""
+	@echo "  Terminal A (MCP):   make cf-tunnel"
+	@echo "    → copies https://<random>.trycloudflare.com/mcp into PO Server Hub"
+	@echo ""
+	@echo "  Terminal B (A2A):   make ngrok"
+	@echo "    → copies the forwarding URL into PO External Agents UI"
+	@echo "    → pastes the same URL into AGENT_PUBLIC_URL in .env"
+	@echo "    → restarts make agent so the card regenerates"
+	@echo ""
 
 agent-card: ## Fetch the local agent card (agent must be running via `make agent`)
 	curl -s http://localhost:8001/.well-known/agent-card.json | python -m json.tool

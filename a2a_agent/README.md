@@ -46,17 +46,64 @@ a2a_agent/
 From the repo root, after `uv sync --all-extras --dev`:
 
 ```bash
-# 1. Start the agent on :8001
+# 1. Start the MCP server on :8000 (new terminal; needed for tool calls in Week-2+)
+make mcp
+
+# 2. Start the A2A agent on :8001 (new terminal)
 make agent
 
-# 2. (new terminal) Verify the agent card
+# 3. (new terminal) Verify the agent card
 make agent-card
-
-# 3. (new terminal) Expose via ngrok for PO registration
-make ngrok
 ```
 
 Requires `.env` at repo root with at minimum `GOOGLE_API_KEY` and `AGENT_API_KEY` set. See root `.env.example` for the full list.
+
+### Exposing to Prompt Opinion (two tunnels)
+
+When registering in a live PO workspace, the **MCP server** and the **A2A agent** need **separate public HTTPS URLs**. ngrok's free tier only supports one online endpoint, so we use **two different tools**:
+
+| Service | Local port | Tunnel tool | Make target | PO registration surface |
+|---|---|---|---|---|
+| **MCP server** | `:8000` | Cloudflare Tunnel (`cloudflared`) | `make cf-tunnel` | Server Hub → `https://<cf-host>/mcp` |
+| **A2A agent** | `:8001` | ngrok | `make ngrok` | External Agents UI → `https://<ngrok-host>/` (base only) |
+
+See GitHub issue [#17](https://github.com/agents-assemble/priorauth-agent/issues/17) for the debug history that motivated this split.
+
+#### One-time setup
+
+```bash
+# ngrok (A2A)
+cp ngrok.example.yml ngrok.yml
+# Edit ngrok.yml: set agent.authtoken (from https://dashboard.ngrok.com)
+
+# cloudflared (MCP) — no config needed, just install
+brew install cloudflared          # macOS
+# winget install cloudflare.cloudflared   # Windows
+```
+
+#### Every session
+
+```bash
+# Terminal 1 — MCP tunnel (prints a *.trycloudflare.com URL)
+make cf-tunnel
+
+# Terminal 2 — A2A tunnel (prints ngrok forwarding URL)
+make ngrok
+```
+
+Then:
+
+1. Copy the cloudflared URL + `/mcp` into PO's **Server Hub**.
+2. Copy the ngrok forwarding URL into PO's **External Agents UI** and into `AGENT_PUBLIC_URL` in `.env`.
+3. Restart `make agent` so the agent card regenerates with the new public base.
+
+Run `make tunnels` for a quick cheat-sheet of these steps.
+
+On Windows without `make`:
+
+```powershell
+pwsh -File scripts/tunnels.ps1
+```
 
 ## Planned follow-up PRs
 

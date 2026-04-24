@@ -1,0 +1,38 @@
+# ngrok config for local dev — A2A agent tunnel ONLY.
+#
+# Purpose
+# -------
+# Expose the A2A agent (port 8001) to Prompt Opinion's External Agents UI.
+# The MCP server (port 8000) uses a separate Cloudflare Tunnel instead
+# because ngrok's free tier only supports one online endpoint at a time.
+# See GitHub issue #17 for the debug history.
+#
+# Setup
+# -----
+# 1. Copy this file:  cp ngrok.example.yml ngrok.yml
+#    (ngrok.yml is gitignored — safe for secrets.)
+# 2. Set `agent.authtoken` to your ngrok authtoken from
+#    https://dashboard.ngrok.com (or export NGROK_AUTHTOKEN and leave
+#    the literal `${NGROK_AUTHTOKEN}` below — ngrok expands it).
+# 3. If you have a reserved free-tier domain, uncomment the `url:` line
+#    under the a2a endpoint and paste it there. Otherwise ngrok assigns
+#    a random hostname each run — copy it into AGENT_PUBLIC_URL in .env
+#    and restart `make agent`.
+# 4. Start the tunnel:  make ngrok
+#    (Windows without Make: ngrok start --all --config ngrok.yml)
+#
+# For the MCP tunnel, run `make cf-tunnel` in a separate terminal.
+# See `make tunnels` for the full two-terminal cheat sheet.
+
+version: "3"
+
+agent:
+  authtoken: ${NGROK_AUTHTOKEN}
+
+endpoints:
+  - name: a2a
+    description: "A2A agent — PO External Agents UI target"
+    # Uncomment and set if you have a reserved domain for the A2A agent:
+    # url: https://YOUR-RESERVED-HOST.ngrok-free.dev
+    upstream:
+      url: http://127.0.0.1:8001
