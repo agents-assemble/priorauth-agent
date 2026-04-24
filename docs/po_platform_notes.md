@@ -43,9 +43,9 @@ These are **two separate auth schemes on the same routes**, picked by the presen
 
 ---
 
-## 2026-04-23 — PO's workspace FHIR search requires typed `patient=Patient/<id>`, not bare `<id>`
+## 2026-04-23 — typed vs. bare `patient` search param (PO UI vs MCP; unconfirmed on PO server)
 
-**Context**: While inspecting PO's browser network activity on a patient-detail page load, I diffed the FHIR search URLs it emits against what our MCP's `FhirClient.search("Condition", params={"patient": patient_id})` sends to the same endpoint.
+**Context**: While inspecting PO's browser network activity on a patient-detail page load, I diffed the FHIR search URLs it emits against what our MCP's `FhirClient.search("Condition", search_parameters={"patient": patient_id})` sends to the same endpoint.
 
 **Observation**: PO's UI consistently sends **typed** patient references:
 
@@ -64,9 +64,9 @@ GET .../fhir/Condition?patient=<uuid>
 
 Per FHIR R4 §3.1.1.6 search parameter search token rules, both forms are spec-legal (bare id is a shorthand when the search parameter's resource-type constraint is unambiguous — `patient` is always `Reference(Patient)`). But real server implementations diverge: HAPI FHIR accepts both (we exercise bare in `tests/mcp_server/test_fetch_patient_context_fhir.py` via `MockTransport`), and the PO server **might** enforce the typed form strictly, given every first-party client uses it.
 
-**Explanation / workaround**: No code change yet — I don't have a confirmed live-PO repro of "bare 200s but yields wrong bundle" or "bare 400s". But the risk profile is asymmetric: sending `Patient/<uuid>` always works everywhere; sending `<uuid>` might silently under-select on PO. Tracked as a Week-2 watch item — first live PO smoke against the imported Anna Demo patient will confirm. If the live call returns an empty bundle where the PO UI shows non-empty (on the same patient, same endpoint), switch `FhirClient._build_search_params` or the caller to prefix `Patient/` for `patient` / `subject` / `individual` / `actor` parameters.
+**Explanation / workaround**: No code change yet — I don't have a confirmed live-PO repro of "bare 200s but yields wrong bundle" or "bare 400s". But the risk profile is asymmetric: sending `Patient/<uuid>` always works everywhere; sending `<uuid>` might silently under-select on PO. Tracked as a Week-2 watch item — first live PO smoke against the imported Anna Demo patient will confirm. If the live call returns an empty bundle where the PO UI shows non-empty (on the same patient, same endpoint), implement one of: (1) **Caller-side** — in `mcp_server/tools/fetch_patient_context.py`, adjust the dicts passed into `_safe_search` (e.g. `{"patient": patient_id}` → `{"patient": f"Patient/{patient_id}"}` for params that are `Reference(Patient)`); (2) **Client-side** — in `FhirClient.search` (`mcp_server/fhir/client.py`), normalize the `search_parameters` dict before `_get` (today the dict is passed through to `httpx` as query params as-is) by prefixing bare ids with `Patient/` for a small allowlist of param names. There is no `FhirClient._build_search_params` in this repo; that was a mistaken pointer in an earlier draft.
 
-**Impact**: Pre-flagged for Week 2 live-FHIR smoke. Non-blocking for Week 1 (demo fixtures in `_DEMO_PATIENTS` are unaffected; the live path is only exercised in CI via `MockTransport`, which is permissive). If PO turns out to be strict here, the fix is a one-line adjustment in `mcp_server/fhir/client.py::search` — wrap bare UUIDs as `f"Patient/{uuid}"` when the parameter name is in a known `Reference(Patient)` allowlist.
+**Impact**: Pre-flagged for Week 2 live-FHIR smoke. Non-blocking for Week 1 (demo fixtures in `_DEMO_PATIENTS` are unaffected; the live path is only exercised in CI via `MockTransport`, which is permissive). If PO turns out to be strict here, the change belongs at the real call sites: `_safe_search` in `fetch_patient_context` and/or the body of `FhirClient.search` — not a non-existent helper.
 
 **Source**: Observed 2026-04-23 in PO browser network tab during patient-detail page load. Diffed against our MCP emission. No live-PO repro of bare-form failure yet — escalate to this note with the observed response if/when it happens.
 
