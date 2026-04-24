@@ -8,6 +8,65 @@ Newest entries at the top. Link to specific PO docs / support threads / Discord 
 
 ---
 
+## 2026-04-23 — LLM cannot read session state; FHIR hook must inject a redacted prompt note
+
+**Context**: Week-1 Platform Spike round-trip. PO general agent → our external A2A agent. `before_model_callback=extract_fhir_context` ran, extracted `patientId=82e4deff-...`, `fhirUrl=https://app.promptopinion.ai/api/workspaces/...`, and a 1558-char JWT, and wrote all three to `callback_context.state`. Live agent-log proof: `hook_called_fhir_found ... patient_id=82e4... fhir_url_set=True fhir_token=len=1558 sha256=6be5b48af078`.
+
+**Observation**: Gemini responded saying *"FHIR context has not been received (required session state keys `patient_id`, `fhir_url`, `fhir_token` are currently missing)"* — the exact opposite of reality. Our original `a2a_agent/agent.py` instruction told the model to "check session state keys". That's an impossible instruction: ADK `before_model_callback` hooks can mutate the request, but `callback_context.state` is a hook-side Python dict with no reflection into the LLM's prompt. The LLM had nothing to "check" and confabulated a negative answer.
+
+**Explanation / workaround**: Two-part fix in `a2a_agent/po_base/fhir_hook.py` + `a2a_agent/agent.py`:
+
+1. Added `_inject_prompt_note(llm_request, ...)` helper. On successful FHIR extraction the hook now appends a `types.Content(role="user", parts=[types.Part.from_text(...)])` to `llm_request.contents` containing a **redacted** summary: `[SYSTEM NOTE — FHIR context received from A2A caller: patient_id=..., fhir_url=set, fhir_token=len=1558 sha256=6be5b48af078. ...do NOT echo the token or URL verbatim to the user.]`. Token value is never emitted — only the `token_fingerprint()` output. URL is reduced to `set`/`[EMPTY]`. Helper degrades silently if `google.genai` isn't importable (e.g. in a bare test harness) — session state is still populated, the LLM just loses visibility for that turn, logged as `prompt_note_injected=false`.
+2. Rewrote the instruction in `agent.py` from "check session state keys" to "look for a line beginning with `[SYSTEM NOTE — FHIR context received`". Explicit pattern the LLM can actually see. Reinforced "never echo the token or URL verbatim" as a standalone negative constraint so a jailbreak-style prompt can't trick the model into leaking the redacted fingerprint.
+
+**Impact**: `a2a_agent/po_base/fhir_hook.py` (hook behavior + top docstring), `a2a_agent/agent.py` (instruction). Logged as local mod in `a2a_agent/REFERENCE.md`. Pure-helper tests pin the redaction invariant in `tests/a2a_agent/test_fhir_hook_inject.py` (added via PR #9 review response to Kevin). Any future sub-agent that needs to reason over FHIR context must either (a) read via the upcoming MCP `fetch_patient_context` tool, or (b) expect the same system-note pattern in its prompt — we will not add more dict-introspection-masquerading-as-LLM-tooling.
+
+**Known limitation (acknowledged; deferred to Week 2)**: the injected content is `role="user"`, which means a real user message that happens to begin with the same `[SYSTEM NOTE — FHIR context received...]` pattern is indistinguishable from our hook-injected note to the LLM. For the Week-1 spike this is acceptable because the note is only used to *narrate* receipt, not *gate* behavior. Once sub-agents start conditioning tool calls on the presence of the note (e.g. "only call `match_payer_criteria` if FHIR context is confirmed"), spoofability becomes a real concern. The Gemini-native fix is to mutate `llm_request.config.system_instruction` (which is not reachable from the user role in the chat template) instead of `contents`. Revisit at Week-2 Day-1 capability check when the three ADK sub-agents land. Flagged by @kevinsgeo in PR #9 review.
+
+**Source**: Observed 2026-04-23 18:11 CDT during first PO round-trip. Agent-log sample in [STATUS.md](../STATUS.md) 2026-04-23 Person B entry. Redaction invariant + cross-file contract pinned in `tests/a2a_agent/test_fhir_hook_inject.py`.
+
+---
+
+## 2026-04-23 — PO reuses `taskId` on follow-up messages; A2A v1 rejects terminal-state reuse
+
+**Context**: Week-1 spike round-trip. After our agent returned `TASK_STATE_COMPLETED` on the first message, PO's general agent tried to "help" by auto-sending a follow-up with the patient_id. PO emitted that follow-up with `params.message.taskId = "dd249d0c-fbc5-48f5-b428-40c81adaba53"` — the exact task id we just completed.
+
+**Observation**: ADK's A2A task manager returned `{"error": {"code": -32602, "message": "Task dd249d0c-... is in terminal state: completed"}}`. Per A2A v1 spec, completed tasks are immutable; new messages should create a **new** task (no `taskId`, or a fresh one). PO appears to conflate "conversation continuation" with "task continuation". Wire proof in agent log: two successive `POST /` with `params.message.taskId=<same uuid>`, first returns 200 + completed task, second returns JSON-RPC -32602.
+
+**Explanation / workaround**: Nothing to fix on our side — ADK's rejection is spec-correct. Short-term: accept that multi-turn via PO's general-agent tool chain is broken until PO fixes task lifecycle. The user-visible symptom is PO showing *"Task ... is in terminal state: completed"* after the second message, then falling back to its own reasoning. Non-blocking for the Week-1 spike gate (single round-trip clears it) and non-blocking for the demo video (Patient B needs-info flow is a single turn with an uploaded-note interstitial, not a chained auto-reply). Options if it bites us during Week-2/3:
+
+1. Cleanest: report to PO support — share the trace id from the `traceparent` header so they can look up our request server-side. W3C tracing is already enabled on their end.
+2. Workaround: middleware strips `taskId` from the payload when it matches a completed task in our own bookkeeping. Cheap, but hides a real PO bug and masks contract drift — do not ship without documenting.
+3. Override: configure ADK task manager to reopen completed tasks. Breaks A2A v1 compliance — rejected.
+
+**Impact**: Logged. No code change this PR. File a PO support ticket pre-Week-2-Day-1 capability check so there's a name on it when we're debugging multi-turn demos.
+
+**Source**: Same round-trip as the note above. PO user-side symptom: *"The request to initiate the prior authorization for the lumbar MRI has been processed, but the external system indicated that the task reached a completed state..."*.
+
+---
+
+## 2026-04-23 — PO backend source IP (Azure US-East-2) + two-fetch registration pattern
+
+**Context**: Live A2A agent log during Week-1 spike PO registration and first round-trip.
+
+**Observations**:
+
+1. **Source IP**: all inbound calls from PO to our agent came from `20.80.113.52` — Microsoft Azure US East 2 datacenter range. That matches PO's known hosting footprint (they're on Azure). Means our Fly.io production deployment can safely allowlist the Azure US-East-2 egress ranges in place of wide-open ingress if we want defense-in-depth beyond the API key. Not urgent — API key + ngrok tunnel scoping is enough for dev — but worth a fly.toml comment when we deploy.
+2. **Two-fetch on registration**: PO fetched `/.well-known/agent-card.json` **twice** within ~21 seconds while adding our agent — `18:08:05` and `18:08:26` CDT. No X-API-Key on either (agent card is public, correct). Most likely pattern: first fetch validates the URL+card schema live while the user is typing; second fetch snapshots the card on "Save". No code action needed; just good to know the second fetch is normal, not a retry / flap.
+3. **Tracing header**: every PO → agent request carries a W3C `traceparent` header (`00-<trace-id>-<span-id>-<flags>`). PO runs distributed tracing server-side. Means any PO support ticket should include the trace id from our request log for one-shot server-side lookup. No sampling suppression observed — flag byte was `01` (sampled) on the spike request.
+
+**Explanation / workaround**:
+
+1. For Week-2 Fly.io deploy: add a comment in `fly.toml` next to the public HTTPS section flagging Azure US-East-2 as the expected source range, and bookmark Microsoft's downloadable IP range JSON (`https://www.microsoft.com/en-us/download/details.aspx?id=56519`) in case we want to tighten ingress post-demo. Do NOT add the allowlist now — PO may change hosting before judging and breaking discovery mid-demo is the worst possible failure.
+2. No action on the two-fetch pattern beyond this note (saves someone future time when they see two 200s in a row on registration and panic).
+3. For tracing: when we open a PO support ticket, paste the relevant `traceparent` header from our log.
+
+**Impact**: Documentation only this PR. Follow-up: `fly.toml` comment when we deploy in Week 2.
+
+**Source**: Agent log `a2a_agent.po_base.middleware incoming_http_request` entries 2026-04-23 18:08:05 / 18:08:26 / 18:11:06 CDT.
+
+---
+
 ## 2026-04-23 — SHARP JWT trust model: we don't verify, FHIR server does
 
 **Context**: Writing `get_patient_id_if_context_exists` in `mcp_server/fhir/context.py` and deciding how to extract the `patient` claim from the `x-fhir-access-token` header.
@@ -33,7 +92,7 @@ Newest entries at the top. Link to specific PO docs / support threads / Discord 
 1. `ServerCapabilities.model_extra` is `None` unless the Pydantic model was constructed with extras, so naively indexing `caps.model_extra["extensions"] = ...` raises on a freshly-built capabilities object. Must initialize `caps.__pydantic_extra__ = {}` first.
 2. mypy strict complains about `caps.model_extra["extensions"] = ...` because `model_extra` is typed `dict[str, Any] | None` even after the `is None` check (the property re-reads `__pydantic_extra__` each call, so the type checker can't narrow across the assignment). Workaround: `assert caps.model_extra is not None` after the init — mypy narrows on the assertion, runtime cost is zero in `-O` builds.
 
-**Explanation / workaround**: Encapsulated the entire mess in `mcp_server/server.py::_patch_capabilities(mcp: FastMCP) -> None` so tool files never see it. Verified live: `POST /mcp` with an `initialize` JSON-RPC returns the `capabilities.extensions["ai.promptopinion/fhir-context"]` blob with all 8 scopes we declare. Cross-reference tracker: https://github.com/modelcontextprotocol/python-sdk — watch for a first-class `extensions=` kwarg on `FastMCP(...)` and delete the monkeypatch when it ships.
+**Explanation / workaround**: Encapsulated the entire mess in `mcp_server/server.py::_patch_capabilities(mcp: FastMCP) -> None` so tool files never see it. Verified live: `POST /mcp` with an `initialize` JSON-RPC returns the `capabilities.extensions["ai.promptopinion/fhir-context"]` blob with all 8 scopes we declare. Cross-reference tracker: [https://github.com/modelcontextprotocol/python-sdk](https://github.com/modelcontextprotocol/python-sdk) — watch for a first-class `extensions=` kwarg on `FastMCP(...)` and delete the monkeypatch when it ships.
 
 **Impact**: Logic lives in `mcp_server/server.py`. Upstream-sync checklist in `mcp_server/REFERENCE.md` notes the monkeypatch as the most likely file to churn on an `mcp` bump.
 
@@ -80,7 +139,7 @@ Newest entries at the top. Link to specific PO docs / support threads / Discord 
 
 **Explanation / workaround**:
 
-1. Moved `load_dotenv(override=True)` to `a2a_agent/__init__.py` as the **first statement** (just below the module docstring). This runs unconditionally when *any* `a2a_agent.*` submodule is imported — including `po_base.middleware` — so env is populated before any module-level env reads.
+1. Moved `load_dotenv(override=True)` to `a2a_agent/__init__.py` as the **first statement** (just below the module docstring). This runs unconditionally when *any* `a2a_agent.`* submodule is imported — including `po_base.middleware` — so env is populated before any module-level env reads.
 2. `override=True` makes `.env` the single source of truth for local dev. Container prod is unaffected because the image has no `.env` file, so `load_dotenv` is a no-op there.
 3. Also added `--env-file .env` to `make agent` as belt-and-suspenders (uvicorn loads env before our Python code even imports, pre-empting any ordering question).
 
@@ -137,7 +196,7 @@ Resolved versions after pin: `google-adk 1.31.1`, `a2a-sdk 0.3.26`. Agent boots 
 
 **Impact**: Pinned in `a2a_agent/pyproject.toml`. Added to [REFERENCE.md](../a2a_agent/REFERENCE.md) upstream-sync checklist. When we pull updates from PO's `po-adk-python`, keep our pin; the reference repo's loose pin will silently break for other forkers until PO bumps it. Worth a tiny courtesy PR back upstream.
 
-**Source**: Encountered during Platform Spike. `google-adk` changelog: https://github.com/google/adk-python/releases, `a2a-sdk` v1.0 notes: https://github.com/google-a2a/a2a-python/blob/main/CHANGELOG.md.
+**Source**: Encountered during Platform Spike. `google-adk` changelog: [https://github.com/google/adk-python/releases](https://github.com/google/adk-python/releases), `a2a-sdk` v1.0 notes: [https://github.com/google-a2a/a2a-python/blob/main/CHANGELOG.md](https://github.com/google-a2a/a2a-python/blob/main/CHANGELOG.md).
 
 ---
 
@@ -156,7 +215,7 @@ install: ## Install all dependencies via uv (including workspace members)
 
 **Impact**: Makefile updated. Anyone (incl. Person A) pulling this branch should run `make install` (not a raw `uv sync`). Added as a header note to the `make install` target.
 
-**Source**: `uv` workspaces docs: https://docs.astral.sh/uv/concepts/projects/workspaces/.
+**Source**: `uv` workspaces docs: [https://docs.astral.sh/uv/concepts/projects/workspaces/](https://docs.astral.sh/uv/concepts/projects/workspaces/).
 
 ---
 
@@ -170,7 +229,7 @@ install: ## Install all dependencies via uv (including workspace members)
 
 **Impact**: [a2a_agent/REFERENCE.md](../a2a_agent/REFERENCE.md) added. Week 3 follow-up logged.
 
-**Source**: https://github.com/prompt-opinion/po-adk-python (checked 2026-04-23, no LICENSE file).
+**Source**: [https://github.com/prompt-opinion/po-adk-python](https://github.com/prompt-opinion/po-adk-python) (checked 2026-04-23, no LICENSE file).
 
 ---
 
@@ -202,7 +261,7 @@ When `a2a-sdk` ships native v1 support, follow the 3-step removal in [REFERENCE.
 
 **Explanation / workaround**: Set as default in `.env.example`. Implementation reads `os.environ.get("GEMINI_MODEL", "gemini-3.1-flash-lite-preview")` so a single `.env` flip rolls back to GA. Backstop model: `gemini-2.5-flash-lite` (GA, confirmed stable).
 
-**Weekly recheck** (Person B): every Monday, open https://aistudio.google.com/app/apikey, confirm the preview model is still listed for our key. If it disappears or rate-limits drop, flip `.env` to `gemini-2.5-flash-lite` on all deployed surfaces within 30 minutes. The backstop should remain functional because all our prompts target the flash-lite capability envelope.
+**Weekly recheck** (Person B): every Monday, open [https://aistudio.google.com/app/apikey](https://aistudio.google.com/app/apikey), confirm the preview model is still listed for our key. If it disappears or rate-limits drop, flip `.env` to `gemini-2.5-flash-lite` on all deployed surfaces within 30 minutes. The backstop should remain functional because all our prompts target the flash-lite capability envelope.
 
 **Impact**: `.env.example` updated with preview comment. Calendar reminder for Person B: Monday morning model check.
 
@@ -242,4 +301,4 @@ When `a2a-sdk` ships native v1 support, follow the 3-step removal in [REFERENCE.
 
 **Impact**: Plan locked to Option 3 with Google ADK Python. Gemini 3.1 Flash Lite via free Google AI Studio key per developer.
 
-**Source**: https://youtu.be/Qvs_QK4meHc (19m24s full walkthrough).
+**Source**: [https://youtu.be/Qvs_QK4meHc](https://youtu.be/Qvs_QK4meHc) (19m24s full walkthrough).
