@@ -19,6 +19,7 @@ from mcp.server.fastmcp import FastMCP
 from shared.fhir_scopes import FHIR_SCOPES
 
 from mcp_server.tools.fetch_patient_context import fetch_patient_context
+from mcp_server.tools.match_payer_criteria import match_payer_criteria
 
 
 def _patch_capabilities(mcp: FastMCP) -> None:
@@ -66,5 +67,16 @@ mcp.tool(
 )(fetch_patient_context)
 
 
-# match_payer_criteria  — registered in Week 2
+mcp.tool(
+    name="match_payer_criteria",
+    description=(
+        "Evaluate a PatientContext against a payer's medical-necessity criteria "
+        "for the requested CPT code. Returns a CriteriaResult with decision "
+        "(approve / needs_info / deny), met and missing criteria with evidence, "
+        "and a reasoning trace. Red-flag cases are fast-tracked deterministically; "
+        "all other cases use a Gemini reasoning pass over the clinical context."
+    ),
+)(match_payer_criteria)
+
+
 # generate_pa_letter    — registered in Week 2

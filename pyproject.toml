@@ -90,7 +90,7 @@ ignore_errors = true
 
 # Upstream libraries without bundled type stubs.
 [[tool.mypy.overrides]]
-module = ["a2a.*", "google.adk.*", "dotenv", "mcp.*"]
+module = ["a2a.*", "google.adk.*", "google.generativeai.*", "dotenv", "mcp.*"]
 ignore_missing_imports = true
 
 [tool.pytest.ini_options]
