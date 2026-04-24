@@ -22,7 +22,7 @@ import os
 
 from google.adk.agents import Agent
 
-from a2a_agent.po_base.fhir_hook import extract_fhir_context
+from a2a_agent.po_base.fhir_hook import FHIR_CONTEXT_NOTE_PREFIX, extract_fhir_context
 
 # Model is read from env per AGENTS.md ("never hardcode the model name").
 # Default: gemini-3.1-flash-lite-preview (PO Connectathon recommendation, preview tier).
@@ -47,7 +47,7 @@ root_agent = Agent(
         "When a clinician asks about a case, respond with:\n"
         "  1. A one-line acknowledgement of the patient/case.\n"
         "  2. Whether FHIR context was received. Look for a line in your "
-        "     input beginning with `[SYSTEM NOTE — FHIR context received`. "
+        f"     input beginning with `{FHIR_CONTEXT_NOTE_PREFIX}`. "
         "     If present, confirm receipt and quote its `patient_id`. If "
         "     absent, say no FHIR context arrived with this message.\n"
         "  3. The next planned step ('will call MCP tool fetch_patient_context "

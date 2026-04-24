@@ -19,9 +19,11 @@ Newest entries at the top. Link to specific PO docs / support threads / Discord 
 1. Added `_inject_prompt_note(llm_request, ...)` helper. On successful FHIR extraction the hook now appends a `types.Content(role="user", parts=[types.Part.from_text(...)])` to `llm_request.contents` containing a **redacted** summary: `[SYSTEM NOTE — FHIR context received from A2A caller: patient_id=..., fhir_url=set, fhir_token=len=1558 sha256=6be5b48af078. ...do NOT echo the token or URL verbatim to the user.]`. Token value is never emitted — only the `token_fingerprint()` output. URL is reduced to `set`/`[EMPTY]`. Helper degrades silently if `google.genai` isn't importable (e.g. in a bare test harness) — session state is still populated, the LLM just loses visibility for that turn, logged as `prompt_note_injected=false`.
 2. Rewrote the instruction in `agent.py` from "check session state keys" to "look for a line beginning with `[SYSTEM NOTE — FHIR context received`". Explicit pattern the LLM can actually see. Reinforced "never echo the token or URL verbatim" as a standalone negative constraint so a jailbreak-style prompt can't trick the model into leaking the redacted fingerprint.
 
-**Impact**: `a2a_agent/po_base/fhir_hook.py` (hook behavior + top docstring), `a2a_agent/agent.py` (instruction). Logged as local mod in `a2a_agent/REFERENCE.md`. No unit test this PR (ADK mock harness would dwarf the fix); live re-verification in PO is the gate. Any future sub-agent that needs to reason over FHIR context must either (a) read via the upcoming MCP `fetch_patient_context` tool, or (b) expect the same system-note pattern in its prompt — we will not add more dict-introspection-masquerading-as-LLM-tooling.
+**Impact**: `a2a_agent/po_base/fhir_hook.py` (hook behavior + top docstring), `a2a_agent/agent.py` (instruction). Logged as local mod in `a2a_agent/REFERENCE.md`. Pure-helper tests pin the redaction invariant in `tests/a2a_agent/test_fhir_hook_inject.py` (added via PR #9 review response to Kevin). Any future sub-agent that needs to reason over FHIR context must either (a) read via the upcoming MCP `fetch_patient_context` tool, or (b) expect the same system-note pattern in its prompt — we will not add more dict-introspection-masquerading-as-LLM-tooling.
 
-**Source**: Observed 2026-04-23 18:11 CDT during first PO round-trip. Agent-log sample in [STATUS.md](../STATUS.md) 2026-04-23 Person B entry.
+**Known limitation (acknowledged; deferred to Week 2)**: the injected content is `role="user"`, which means a real user message that happens to begin with the same `[SYSTEM NOTE — FHIR context received...]` pattern is indistinguishable from our hook-injected note to the LLM. For the Week-1 spike this is acceptable because the note is only used to *narrate* receipt, not *gate* behavior. Once sub-agents start conditioning tool calls on the presence of the note (e.g. "only call `match_payer_criteria` if FHIR context is confirmed"), spoofability becomes a real concern. The Gemini-native fix is to mutate `llm_request.config.system_instruction` (which is not reachable from the user role in the chat template) instead of `contents`. Revisit at Week-2 Day-1 capability check when the three ADK sub-agents land. Flagged by @kevinsgeo in PR #9 review.
+
+**Source**: Observed 2026-04-23 18:11 CDT during first PO round-trip. Agent-log sample in [STATUS.md](../STATUS.md) 2026-04-23 Person B entry. Redaction invariant + cross-file contract pinned in `tests/a2a_agent/test_fhir_hook_inject.py`.
 
 ---
 
@@ -90,7 +92,7 @@ Newest entries at the top. Link to specific PO docs / support threads / Discord 
 1. `ServerCapabilities.model_extra` is `None` unless the Pydantic model was constructed with extras, so naively indexing `caps.model_extra["extensions"] = ...` raises on a freshly-built capabilities object. Must initialize `caps.__pydantic_extra__ = {}` first.
 2. mypy strict complains about `caps.model_extra["extensions"] = ...` because `model_extra` is typed `dict[str, Any] | None` even after the `is None` check (the property re-reads `__pydantic_extra__` each call, so the type checker can't narrow across the assignment). Workaround: `assert caps.model_extra is not None` after the init — mypy narrows on the assertion, runtime cost is zero in `-O` builds.
 
-**Explanation / workaround**: Encapsulated the entire mess in `mcp_server/server.py::_patch_capabilities(mcp: FastMCP) -> None` so tool files never see it. Verified live: `POST /mcp` with an `initialize` JSON-RPC returns the `capabilities.extensions["ai.promptopinion/fhir-context"]` blob with all 8 scopes we declare. Cross-reference tracker: https://github.com/modelcontextprotocol/python-sdk — watch for a first-class `extensions=` kwarg on `FastMCP(...)` and delete the monkeypatch when it ships.
+**Explanation / workaround**: Encapsulated the entire mess in `mcp_server/server.py::_patch_capabilities(mcp: FastMCP) -> None` so tool files never see it. Verified live: `POST /mcp` with an `initialize` JSON-RPC returns the `capabilities.extensions["ai.promptopinion/fhir-context"]` blob with all 8 scopes we declare. Cross-reference tracker: [https://github.com/modelcontextprotocol/python-sdk](https://github.com/modelcontextprotocol/python-sdk) — watch for a first-class `extensions=` kwarg on `FastMCP(...)` and delete the monkeypatch when it ships.
 
 **Impact**: Logic lives in `mcp_server/server.py`. Upstream-sync checklist in `mcp_server/REFERENCE.md` notes the monkeypatch as the most likely file to churn on an `mcp` bump.
 
@@ -137,7 +139,7 @@ Newest entries at the top. Link to specific PO docs / support threads / Discord 
 
 **Explanation / workaround**:
 
-1. Moved `load_dotenv(override=True)` to `a2a_agent/__init__.py` as the **first statement** (just below the module docstring). This runs unconditionally when *any* `a2a_agent.*` submodule is imported — including `po_base.middleware` — so env is populated before any module-level env reads.
+1. Moved `load_dotenv(override=True)` to `a2a_agent/__init__.py` as the **first statement** (just below the module docstring). This runs unconditionally when *any* `a2a_agent.`* submodule is imported — including `po_base.middleware` — so env is populated before any module-level env reads.
 2. `override=True` makes `.env` the single source of truth for local dev. Container prod is unaffected because the image has no `.env` file, so `load_dotenv` is a no-op there.
 3. Also added `--env-file .env` to `make agent` as belt-and-suspenders (uvicorn loads env before our Python code even imports, pre-empting any ordering question).
 
@@ -194,7 +196,7 @@ Resolved versions after pin: `google-adk 1.31.1`, `a2a-sdk 0.3.26`. Agent boots 
 
 **Impact**: Pinned in `a2a_agent/pyproject.toml`. Added to [REFERENCE.md](../a2a_agent/REFERENCE.md) upstream-sync checklist. When we pull updates from PO's `po-adk-python`, keep our pin; the reference repo's loose pin will silently break for other forkers until PO bumps it. Worth a tiny courtesy PR back upstream.
 
-**Source**: Encountered during Platform Spike. `google-adk` changelog: https://github.com/google/adk-python/releases, `a2a-sdk` v1.0 notes: https://github.com/google-a2a/a2a-python/blob/main/CHANGELOG.md.
+**Source**: Encountered during Platform Spike. `google-adk` changelog: [https://github.com/google/adk-python/releases](https://github.com/google/adk-python/releases), `a2a-sdk` v1.0 notes: [https://github.com/google-a2a/a2a-python/blob/main/CHANGELOG.md](https://github.com/google-a2a/a2a-python/blob/main/CHANGELOG.md).
 
 ---
 
@@ -213,7 +215,7 @@ install: ## Install all dependencies via uv (including workspace members)
 
 **Impact**: Makefile updated. Anyone (incl. Person A) pulling this branch should run `make install` (not a raw `uv sync`). Added as a header note to the `make install` target.
 
-**Source**: `uv` workspaces docs: https://docs.astral.sh/uv/concepts/projects/workspaces/.
+**Source**: `uv` workspaces docs: [https://docs.astral.sh/uv/concepts/projects/workspaces/](https://docs.astral.sh/uv/concepts/projects/workspaces/).
 
 ---
 
@@ -227,7 +229,7 @@ install: ## Install all dependencies via uv (including workspace members)
 
 **Impact**: [a2a_agent/REFERENCE.md](../a2a_agent/REFERENCE.md) added. Week 3 follow-up logged.
 
-**Source**: https://github.com/prompt-opinion/po-adk-python (checked 2026-04-23, no LICENSE file).
+**Source**: [https://github.com/prompt-opinion/po-adk-python](https://github.com/prompt-opinion/po-adk-python) (checked 2026-04-23, no LICENSE file).
 
 ---
 
@@ -259,7 +261,7 @@ When `a2a-sdk` ships native v1 support, follow the 3-step removal in [REFERENCE.
 
 **Explanation / workaround**: Set as default in `.env.example`. Implementation reads `os.environ.get("GEMINI_MODEL", "gemini-3.1-flash-lite-preview")` so a single `.env` flip rolls back to GA. Backstop model: `gemini-2.5-flash-lite` (GA, confirmed stable).
 
-**Weekly recheck** (Person B): every Monday, open https://aistudio.google.com/app/apikey, confirm the preview model is still listed for our key. If it disappears or rate-limits drop, flip `.env` to `gemini-2.5-flash-lite` on all deployed surfaces within 30 minutes. The backstop should remain functional because all our prompts target the flash-lite capability envelope.
+**Weekly recheck** (Person B): every Monday, open [https://aistudio.google.com/app/apikey](https://aistudio.google.com/app/apikey), confirm the preview model is still listed for our key. If it disappears or rate-limits drop, flip `.env` to `gemini-2.5-flash-lite` on all deployed surfaces within 30 minutes. The backstop should remain functional because all our prompts target the flash-lite capability envelope.
 
 **Impact**: `.env.example` updated with preview comment. Calendar reminder for Person B: Monday morning model check.
 
@@ -299,4 +301,4 @@ When `a2a-sdk` ships native v1 support, follow the 3-step removal in [REFERENCE.
 
 **Impact**: Plan locked to Option 3 with Google ADK Python. Gemini 3.1 Flash Lite via free Google AI Studio key per developer.
 
-**Source**: https://youtu.be/Qvs_QK4meHc (19m24s full walkthrough).
+**Source**: [https://youtu.be/Qvs_QK4meHc](https://youtu.be/Qvs_QK4meHc) (19m24s full walkthrough).

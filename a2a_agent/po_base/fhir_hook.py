@@ -41,6 +41,14 @@ LOG_HOOK_RAW_OBJECTS = os.getenv("LOG_HOOK_RAW_OBJECTS", "false").lower() == "tr
 # Must match the AgentExtension URI declared in each agent's app.py.
 FHIR_CONTEXT_KEY = "fhir-context"
 
+# Prefix of the system-style note that :func:`_inject_prompt_note` appends to
+# ``llm_request.contents`` when FHIR context is extracted. Exported so that the
+# agent-side instruction (see ``a2a_agent/agent.py``) can import this exact
+# string rather than duplicating it — keeps the hook ↔ instruction contract
+# under a single source of truth. If you change this, update the tests in
+# ``tests/a2a_agent/test_fhir_hook_inject.py`` at the same time.
+FHIR_CONTEXT_NOTE_PREFIX = "[SYSTEM NOTE — FHIR context received"
+
 
 # ── Private helpers ────────────────────────────────────────────────────────────
 
@@ -138,12 +146,13 @@ def _inject_prompt_note(
         return False
 
     note = (
-        "[SYSTEM NOTE — FHIR context received from A2A caller: "
+        f"{FHIR_CONTEXT_NOTE_PREFIX} from A2A caller: "
         f"patient_id={patient_id or '[EMPTY]'}, "
         f"fhir_url={'set' if fhir_url else '[EMPTY]'}, "
         f"fhir_token={fhir_token_fingerprint}. "
-        "Credentials are available to tools via session state; "
-        "do NOT echo the token or URL verbatim to the user.]"
+        "Credentials are available to tools via session state. "
+        "patient_id MAY be quoted back to the user to confirm receipt; "
+        "the token and URL MUST NEVER be echoed verbatim.]"
     )
 
     try:
@@ -288,9 +297,9 @@ def extract_fhir_context(callback_context, llm_request):
             correlation["context_id"],
             correlation["message_id"],
             callback_context.state["patient_id"],
-            bool(callback_context.state["fhir_url"]),
+            str(bool(callback_context.state["fhir_url"])).lower(),
             token_fp,
-            prompt_note_injected,
+            str(prompt_note_injected).lower(),
         )
     else:
         logger.info(
