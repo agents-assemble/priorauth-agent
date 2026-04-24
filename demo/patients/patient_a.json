@@ -7,25 +7,39 @@
       {
         "system": "https://priorauth-agent.example/tags",
         "code": "demo-fixture",
-        "display": "Prior-auth demo FHIR fixture \u2014 Patient A (happy path)"
+        "display": "Prior-auth demo FHIR fixture — Patient A (happy path)"
       }
     ]
   },
   "entry": [
     {
       "fullUrl": "Patient/demo-patient-a",
-      "request": { "method": "PUT", "url": "Patient/demo-patient-a" },
+      "request": {
+        "method": "POST",
+        "url": "Patient"
+      },
       "resource": {
         "resourceType": "Patient",
         "id": "demo-patient-a",
-        "name": [{ "use": "anonymous", "family": "Demo", "given": ["Anna"] }],
+        "name": [
+          {
+            "use": "anonymous",
+            "family": "Demo",
+            "given": [
+              "Anna"
+            ]
+          }
+        ],
         "gender": "female",
         "birthDate": "1978-11-03"
       }
     },
     {
       "fullUrl": "Condition/demo-patient-a-lbp",
-      "request": { "method": "PUT", "url": "Condition/demo-patient-a-lbp" },
+      "request": {
+        "method": "POST",
+        "url": "Condition"
+      },
       "resource": {
         "resourceType": "Condition",
         "id": "demo-patient-a-lbp",
@@ -54,14 +68,19 @@
             }
           ]
         },
-        "subject": { "reference": "Patient/demo-patient-a" },
+        "subject": {
+          "reference": "Patient/demo-patient-a"
+        },
         "onsetDateTime": "2026-01-15",
         "recordedDate": "2026-04-15"
       }
     },
     {
       "fullUrl": "Condition/demo-patient-a-radic",
-      "request": { "method": "PUT", "url": "Condition/demo-patient-a-radic" },
+      "request": {
+        "method": "POST",
+        "url": "Condition"
+      },
       "resource": {
         "resourceType": "Condition",
         "id": "demo-patient-a-radic",
@@ -90,7 +109,9 @@
             }
           ]
         },
-        "subject": { "reference": "Patient/demo-patient-a" },
+        "subject": {
+          "reference": "Patient/demo-patient-a"
+        },
         "onsetDateTime": "2026-03-18",
         "recordedDate": "2026-04-15"
       }
@@ -98,8 +119,8 @@
     {
       "fullUrl": "MedicationRequest/demo-patient-a-naproxen",
       "request": {
-        "method": "PUT",
-        "url": "MedicationRequest/demo-patient-a-naproxen"
+        "method": "POST",
+        "url": "MedicationRequest"
       },
       "resource": {
         "resourceType": "MedicationRequest",
@@ -107,7 +128,9 @@
         "status": "completed",
         "intent": "order",
         "authoredOn": "2026-02-15",
-        "subject": { "reference": "Patient/demo-patient-a" },
+        "subject": {
+          "reference": "Patient/demo-patient-a"
+        },
         "medicationCodeableConcept": {
           "text": "naproxen 500 mg oral tablet",
           "coding": [
@@ -121,21 +144,37 @@
         "dosageInstruction": [
           {
             "text": "500 mg PO BID with food",
-            "timing": { "repeat": { "frequency": 2, "period": 1, "periodUnit": "d" } }
+            "timing": {
+              "repeat": {
+                "frequency": 2,
+                "period": 1,
+                "periodUnit": "d"
+              }
+            }
           }
         ],
         "dispenseRequest": {
-          "validityPeriod": { "start": "2026-02-15", "end": "2026-03-29" },
-          "expectedSupplyDuration": { "value": 42, "unit": "d" }
+          "validityPeriod": {
+            "start": "2026-02-15",
+            "end": "2026-03-29"
+          },
+          "expectedSupplyDuration": {
+            "value": 42,
+            "unit": "d"
+          }
         },
-        "reasonReference": [{ "reference": "Condition/demo-patient-a-lbp" }]
+        "reasonReference": [
+          {
+            "reference": "Condition/demo-patient-a-lbp"
+          }
+        ]
       }
     },
     {
       "fullUrl": "MedicationRequest/demo-patient-a-cyclobenzaprine",
       "request": {
-        "method": "PUT",
-        "url": "MedicationRequest/demo-patient-a-cyclobenzaprine"
+        "method": "POST",
+        "url": "MedicationRequest"
       },
       "resource": {
         "resourceType": "MedicationRequest",
@@ -143,7 +182,9 @@
         "status": "completed",
         "intent": "order",
         "authoredOn": "2026-03-01",
-        "subject": { "reference": "Patient/demo-patient-a" },
+        "subject": {
+          "reference": "Patient/demo-patient-a"
+        },
         "medicationCodeableConcept": {
           "text": "cyclobenzaprine 10 mg oral tablet",
           "coding": [
@@ -157,24 +198,45 @@
         "dosageInstruction": [
           {
             "text": "10 mg PO QHS",
-            "timing": { "repeat": { "frequency": 1, "period": 1, "periodUnit": "d" } }
+            "timing": {
+              "repeat": {
+                "frequency": 1,
+                "period": 1,
+                "periodUnit": "d"
+              }
+            }
           }
         ],
         "dispenseRequest": {
-          "validityPeriod": { "start": "2026-03-01", "end": "2026-03-22" },
-          "expectedSupplyDuration": { "value": 21, "unit": "d" }
+          "validityPeriod": {
+            "start": "2026-03-01",
+            "end": "2026-03-22"
+          },
+          "expectedSupplyDuration": {
+            "value": 21,
+            "unit": "d"
+          }
         },
-        "reasonReference": [{ "reference": "Condition/demo-patient-a-lbp" }]
+        "reasonReference": [
+          {
+            "reference": "Condition/demo-patient-a-lbp"
+          }
+        ]
       }
     },
     {
       "fullUrl": "Procedure/demo-patient-a-pt-01",
-      "request": { "method": "PUT", "url": "Procedure/demo-patient-a-pt-01" },
+      "request": {
+        "method": "POST",
+        "url": "Procedure"
+      },
       "resource": {
         "resourceType": "Procedure",
         "id": "demo-patient-a-pt-01",
         "status": "completed",
-        "subject": { "reference": "Patient/demo-patient-a" },
+        "subject": {
+          "reference": "Patient/demo-patient-a"
+        },
         "performedDateTime": "2026-02-10",
         "code": {
           "coding": [
@@ -189,12 +251,17 @@
     },
     {
       "fullUrl": "Procedure/demo-patient-a-pt-02",
-      "request": { "method": "PUT", "url": "Procedure/demo-patient-a-pt-02" },
+      "request": {
+        "method": "POST",
+        "url": "Procedure"
+      },
       "resource": {
         "resourceType": "Procedure",
         "id": "demo-patient-a-pt-02",
         "status": "completed",
-        "subject": { "reference": "Patient/demo-patient-a" },
+        "subject": {
+          "reference": "Patient/demo-patient-a"
+        },
         "performedDateTime": "2026-02-17",
         "code": {
           "coding": [
@@ -209,12 +276,17 @@
     },
     {
       "fullUrl": "Procedure/demo-patient-a-pt-03",
-      "request": { "method": "PUT", "url": "Procedure/demo-patient-a-pt-03" },
+      "request": {
+        "method": "POST",
+        "url": "Procedure"
+      },
       "resource": {
         "resourceType": "Procedure",
         "id": "demo-patient-a-pt-03",
         "status": "completed",
-        "subject": { "reference": "Patient/demo-patient-a" },
+        "subject": {
+          "reference": "Patient/demo-patient-a"
+        },
         "performedDateTime": "2026-02-24",
         "code": {
           "coding": [
@@ -229,12 +301,17 @@
     },
     {
       "fullUrl": "Procedure/demo-patient-a-pt-04",
-      "request": { "method": "PUT", "url": "Procedure/demo-patient-a-pt-04" },
+      "request": {
+        "method": "POST",
+        "url": "Procedure"
+      },
       "resource": {
         "resourceType": "Procedure",
         "id": "demo-patient-a-pt-04",
         "status": "completed",
-        "subject": { "reference": "Patient/demo-patient-a" },
+        "subject": {
+          "reference": "Patient/demo-patient-a"
+        },
         "performedDateTime": "2026-03-03",
         "code": {
           "coding": [
@@ -249,12 +326,17 @@
     },
     {
       "fullUrl": "Procedure/demo-patient-a-pt-05",
-      "request": { "method": "PUT", "url": "Procedure/demo-patient-a-pt-05" },
+      "request": {
+        "method": "POST",
+        "url": "Procedure"
+      },
       "resource": {
         "resourceType": "Procedure",
         "id": "demo-patient-a-pt-05",
         "status": "completed",
-        "subject": { "reference": "Patient/demo-patient-a" },
+        "subject": {
+          "reference": "Patient/demo-patient-a"
+        },
         "performedDateTime": "2026-03-10",
         "code": {
           "coding": [
@@ -269,12 +351,17 @@
     },
     {
       "fullUrl": "Procedure/demo-patient-a-pt-06",
-      "request": { "method": "PUT", "url": "Procedure/demo-patient-a-pt-06" },
+      "request": {
+        "method": "POST",
+        "url": "Procedure"
+      },
       "resource": {
         "resourceType": "Procedure",
         "id": "demo-patient-a-pt-06",
         "status": "completed",
-        "subject": { "reference": "Patient/demo-patient-a" },
+        "subject": {
+          "reference": "Patient/demo-patient-a"
+        },
         "performedDateTime": "2026-03-17",
         "code": {
           "coding": [
@@ -289,12 +376,17 @@
     },
     {
       "fullUrl": "Procedure/demo-patient-a-pt-07",
-      "request": { "method": "PUT", "url": "Procedure/demo-patient-a-pt-07" },
+      "request": {
+        "method": "POST",
+        "url": "Procedure"
+      },
       "resource": {
         "resourceType": "Procedure",
         "id": "demo-patient-a-pt-07",
         "status": "completed",
-        "subject": { "reference": "Patient/demo-patient-a" },
+        "subject": {
+          "reference": "Patient/demo-patient-a"
+        },
         "performedDateTime": "2026-03-24",
         "code": {
           "coding": [
@@ -309,12 +401,17 @@
     },
     {
       "fullUrl": "Procedure/demo-patient-a-pt-08",
-      "request": { "method": "PUT", "url": "Procedure/demo-patient-a-pt-08" },
+      "request": {
+        "method": "POST",
+        "url": "Procedure"
+      },
       "resource": {
         "resourceType": "Procedure",
         "id": "demo-patient-a-pt-08",
         "status": "completed",
-        "subject": { "reference": "Patient/demo-patient-a" },
+        "subject": {
+          "reference": "Patient/demo-patient-a"
+        },
         "performedDateTime": "2026-03-28",
         "code": {
           "coding": [
@@ -330,8 +427,8 @@
     {
       "fullUrl": "ServiceRequest/demo-patient-a-sr-72148",
       "request": {
-        "method": "PUT",
-        "url": "ServiceRequest/demo-patient-a-sr-72148"
+        "method": "POST",
+        "url": "ServiceRequest"
       },
       "resource": {
         "resourceType": "ServiceRequest",
@@ -340,7 +437,9 @@
         "intent": "order",
         "priority": "routine",
         "authoredOn": "2026-04-15",
-        "subject": { "reference": "Patient/demo-patient-a" },
+        "subject": {
+          "reference": "Patient/demo-patient-a"
+        },
         "requester": {
           "display": "Dr. Alice Chen, MD"
         },
@@ -377,13 +476,22 @@
     },
     {
       "fullUrl": "Coverage/demo-patient-a-cov",
-      "request": { "method": "PUT", "url": "Coverage/demo-patient-a-cov" },
+      "request": {
+        "method": "POST",
+        "url": "Coverage"
+      },
       "resource": {
         "resourceType": "Coverage",
         "id": "demo-patient-a-cov",
         "status": "active",
-        "beneficiary": { "reference": "Patient/demo-patient-a" },
-        "payor": [{ "display": "Cigna HealthCare" }],
+        "beneficiary": {
+          "reference": "Patient/demo-patient-a"
+        },
+        "payor": [
+          {
+            "display": "Cigna HealthCare"
+          }
+        ],
         "subscriberId": "DEMO-A-99901",
         "class": [
           {

@@ -7,25 +7,39 @@
       {
         "system": "https://priorauth-agent.example/tags",
         "code": "demo-fixture",
-        "display": "Prior-auth demo FHIR fixture \u2014 Patient B (needs-info)"
+        "display": "Prior-auth demo FHIR fixture — Patient B (needs-info)"
       }
     ]
   },
   "entry": [
     {
       "fullUrl": "Patient/demo-patient-b",
-      "request": { "method": "PUT", "url": "Patient/demo-patient-b" },
+      "request": {
+        "method": "POST",
+        "url": "Patient"
+      },
       "resource": {
         "resourceType": "Patient",
         "id": "demo-patient-b",
-        "name": [{ "use": "anonymous", "family": "Demo", "given": ["Benjamin"] }],
+        "name": [
+          {
+            "use": "anonymous",
+            "family": "Demo",
+            "given": [
+              "Benjamin"
+            ]
+          }
+        ],
         "gender": "male",
         "birthDate": "1973-09-04"
       }
     },
     {
       "fullUrl": "Condition/demo-patient-b-lbp",
-      "request": { "method": "PUT", "url": "Condition/demo-patient-b-lbp" },
+      "request": {
+        "method": "POST",
+        "url": "Condition"
+      },
       "resource": {
         "resourceType": "Condition",
         "id": "demo-patient-b-lbp",
@@ -54,7 +68,9 @@
             }
           ]
         },
-        "subject": { "reference": "Patient/demo-patient-b" },
+        "subject": {
+          "reference": "Patient/demo-patient-b"
+        },
         "onsetDateTime": "2026-02-05",
         "recordedDate": "2026-04-15"
       }
@@ -62,8 +78,8 @@
     {
       "fullUrl": "MedicationRequest/demo-patient-b-ibuprofen",
       "request": {
-        "method": "PUT",
-        "url": "MedicationRequest/demo-patient-b-ibuprofen"
+        "method": "POST",
+        "url": "MedicationRequest"
       },
       "resource": {
         "resourceType": "MedicationRequest",
@@ -71,7 +87,9 @@
         "status": "active",
         "intent": "order",
         "authoredOn": "2026-03-10",
-        "subject": { "reference": "Patient/demo-patient-b" },
+        "subject": {
+          "reference": "Patient/demo-patient-b"
+        },
         "medicationCodeableConcept": {
           "text": "ibuprofen 600 mg oral tablet",
           "coding": [
@@ -85,27 +103,45 @@
         "dosageInstruction": [
           {
             "text": "600 mg PO TID with food",
-            "timing": { "repeat": { "frequency": 3, "period": 1, "periodUnit": "d" } }
+            "timing": {
+              "repeat": {
+                "frequency": 3,
+                "period": 1,
+                "periodUnit": "d"
+              }
+            }
           }
         ],
         "dispenseRequest": {
-          "validityPeriod": { "start": "2026-03-10", "end": "2026-04-15" },
-          "expectedSupplyDuration": { "value": 35, "unit": "d" }
+          "validityPeriod": {
+            "start": "2026-03-10",
+            "end": "2026-04-15"
+          },
+          "expectedSupplyDuration": {
+            "value": 35,
+            "unit": "d"
+          }
         },
-        "reasonReference": [{ "reference": "Condition/demo-patient-b-lbp" }]
+        "reasonReference": [
+          {
+            "reference": "Condition/demo-patient-b-lbp"
+          }
+        ]
       }
     },
     {
       "fullUrl": "Procedure/demo-patient-b-pt-intake",
       "request": {
-        "method": "PUT",
-        "url": "Procedure/demo-patient-b-pt-intake"
+        "method": "POST",
+        "url": "Procedure"
       },
       "resource": {
         "resourceType": "Procedure",
         "id": "demo-patient-b-pt-intake",
         "status": "completed",
-        "subject": { "reference": "Patient/demo-patient-b" },
+        "subject": {
+          "reference": "Patient/demo-patient-b"
+        },
         "performedDateTime": "2026-03-29",
         "code": {
           "coding": [
@@ -126,8 +162,8 @@
     {
       "fullUrl": "ServiceRequest/demo-patient-b-sr-72148",
       "request": {
-        "method": "PUT",
-        "url": "ServiceRequest/demo-patient-b-sr-72148"
+        "method": "POST",
+        "url": "ServiceRequest"
       },
       "resource": {
         "resourceType": "ServiceRequest",
@@ -136,7 +172,9 @@
         "intent": "order",
         "priority": "routine",
         "authoredOn": "2026-04-15",
-        "subject": { "reference": "Patient/demo-patient-b" },
+        "subject": {
+          "reference": "Patient/demo-patient-b"
+        },
         "requester": {
           "display": "Dr. Marcus Rivera, MD"
         },
@@ -164,13 +202,22 @@
     },
     {
       "fullUrl": "Coverage/demo-patient-b-cov",
-      "request": { "method": "PUT", "url": "Coverage/demo-patient-b-cov" },
+      "request": {
+        "method": "POST",
+        "url": "Coverage"
+      },
       "resource": {
         "resourceType": "Coverage",
         "id": "demo-patient-b-cov",
         "status": "active",
-        "beneficiary": { "reference": "Patient/demo-patient-b" },
-        "payor": [{ "display": "Cigna HealthCare" }],
+        "beneficiary": {
+          "reference": "Patient/demo-patient-b"
+        },
+        "payor": [
+          {
+            "display": "Cigna HealthCare"
+          }
+        ],
         "subscriberId": "DEMO-B-99902",
         "class": [
           {

@@ -61,7 +61,9 @@ curl -X POST \
 
 For the Prompt Opinion workspace, follow the instructions in `demo/README.md` (UI-driven bundle upload, then upload matching clinical note via the Documents tab).
 
-All resources use `request.method: "PUT"` with a stable resource URL, so re-running an import is idempotent — the same resources get updated in place, not duplicated.
+All resources use `request.method: "POST"` against the ResourceType endpoint (`Patient`, `Condition`, …). The FHIR server assigns the logical id on create; intra-bundle references resolve via `fullUrl` matching and are rewritten server-side during transaction processing. We use POST rather than PUT-with-id because the Prompt Opinion workspace FHIR — like many strict servers — has `updateCreate` disabled, so PUT to a non-existent `/Patient/demo-patient-a` fails with `Severity: error | Code: not-supported | "The updateCreate operation is not supported. A resource was provided with an id that doesn't exist"`. The bundle's `resource.id` values (`demo-patient-a`, etc.) are retained as hints some servers honor, and as the stable logical ids used by the offline `_DEMO_PATIENTS` fallback in `mcp_server.tools.fetch_patient_context`; the PO-server-assigned logical ids are used for live FHIR lookups.
+
+Because each entry is a fresh POST, **re-running an import creates duplicates**. If you need to re-seed (e.g. between demo-video takes), delete the prior resources via the PO Patients UI first.
 
 ## Golden-file tests
 

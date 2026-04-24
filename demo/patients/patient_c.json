@@ -7,25 +7,39 @@
       {
         "system": "https://priorauth-agent.example/tags",
         "code": "demo-fixture",
-        "display": "Prior-auth demo FHIR fixture \u2014 Patient C (red-flag fast-track)"
+        "display": "Prior-auth demo FHIR fixture — Patient C (red-flag fast-track)"
       }
     ]
   },
   "entry": [
     {
       "fullUrl": "Patient/demo-patient-c",
-      "request": { "method": "PUT", "url": "Patient/demo-patient-c" },
+      "request": {
+        "method": "POST",
+        "url": "Patient"
+      },
       "resource": {
         "resourceType": "Patient",
         "id": "demo-patient-c",
-        "name": [{ "use": "anonymous", "family": "Demo", "given": ["Catherine"] }],
+        "name": [
+          {
+            "use": "anonymous",
+            "family": "Demo",
+            "given": [
+              "Celia"
+            ]
+          }
+        ],
         "gender": "female",
         "birthDate": "1964-07-15"
       }
     },
     {
       "fullUrl": "Condition/demo-patient-c-lbp",
-      "request": { "method": "PUT", "url": "Condition/demo-patient-c-lbp" },
+      "request": {
+        "method": "POST",
+        "url": "Condition"
+      },
       "resource": {
         "resourceType": "Condition",
         "id": "demo-patient-c-lbp",
@@ -54,14 +68,19 @@
             }
           ]
         },
-        "subject": { "reference": "Patient/demo-patient-c" },
+        "subject": {
+          "reference": "Patient/demo-patient-c"
+        },
         "onsetDateTime": "2026-03-25",
         "recordedDate": "2026-04-15"
       }
     },
     {
       "fullUrl": "Condition/demo-patient-c-hxca",
-      "request": { "method": "PUT", "url": "Condition/demo-patient-c-hxca" },
+      "request": {
+        "method": "POST",
+        "url": "Condition"
+      },
       "resource": {
         "resourceType": "Condition",
         "id": "demo-patient-c-hxca",
@@ -90,14 +109,19 @@
             }
           ]
         },
-        "subject": { "reference": "Patient/demo-patient-c" },
+        "subject": {
+          "reference": "Patient/demo-patient-c"
+        },
         "onsetDateTime": "2019-03-01",
         "recordedDate": "2019-03-12"
       }
     },
     {
       "fullUrl": "Condition/demo-patient-c-uinc",
-      "request": { "method": "PUT", "url": "Condition/demo-patient-c-uinc" },
+      "request": {
+        "method": "POST",
+        "url": "Condition"
+      },
       "resource": {
         "resourceType": "Condition",
         "id": "demo-patient-c-uinc",
@@ -126,14 +150,19 @@
             }
           ]
         },
-        "subject": { "reference": "Patient/demo-patient-c" },
+        "subject": {
+          "reference": "Patient/demo-patient-c"
+        },
         "onsetDateTime": "2026-04-13",
         "recordedDate": "2026-04-15"
       }
     },
     {
       "fullUrl": "Condition/demo-patient-c-uret",
-      "request": { "method": "PUT", "url": "Condition/demo-patient-c-uret" },
+      "request": {
+        "method": "POST",
+        "url": "Condition"
+      },
       "resource": {
         "resourceType": "Condition",
         "id": "demo-patient-c-uret",
@@ -162,7 +191,9 @@
             }
           ]
         },
-        "subject": { "reference": "Patient/demo-patient-c" },
+        "subject": {
+          "reference": "Patient/demo-patient-c"
+        },
         "onsetDateTime": "2026-04-13",
         "recordedDate": "2026-04-15"
       }
@@ -170,8 +201,8 @@
     {
       "fullUrl": "ServiceRequest/demo-patient-c-sr-72148",
       "request": {
-        "method": "PUT",
-        "url": "ServiceRequest/demo-patient-c-sr-72148"
+        "method": "POST",
+        "url": "ServiceRequest"
       },
       "resource": {
         "resourceType": "ServiceRequest",
@@ -180,7 +211,9 @@
         "intent": "order",
         "priority": "stat",
         "authoredOn": "2026-04-15",
-        "subject": { "reference": "Patient/demo-patient-c" },
+        "subject": {
+          "reference": "Patient/demo-patient-c"
+        },
         "requester": {
           "display": "Dr. Priya Patel, MD"
         },
@@ -235,13 +268,22 @@
     },
     {
       "fullUrl": "Coverage/demo-patient-c-cov",
-      "request": { "method": "PUT", "url": "Coverage/demo-patient-c-cov" },
+      "request": {
+        "method": "POST",
+        "url": "Coverage"
+      },
       "resource": {
         "resourceType": "Coverage",
         "id": "demo-patient-c-cov",
         "status": "active",
-        "beneficiary": { "reference": "Patient/demo-patient-c" },
-        "payor": [{ "display": "Aetna" }],
+        "beneficiary": {
+          "reference": "Patient/demo-patient-c"
+        },
+        "payor": [
+          {
+            "display": "Aetna"
+          }
+        ],
         "subscriberId": "DEMO-C-99903",
         "class": [
           {

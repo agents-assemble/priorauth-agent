@@ -90,15 +90,22 @@ def test_bundle_is_well_formed_transaction(stem: str) -> None:
     entries = bundle.get("entry", [])
     assert entries, "bundle has no entries"
     # Every entry must carry both a resource (for the server to apply) and a
-    # request (so the server knows what URL to PUT it to). If either is
-    # missing, a real FHIR server rejects the whole transaction atomically.
+    # request (so the server knows how to apply it). If either is missing,
+    # a real FHIR server rejects the whole transaction atomically.
     for i, entry in enumerate(entries):
         assert "resource" in entry, f"entry[{i}] missing 'resource'"
         assert "request" in entry, f"entry[{i}] missing 'request'"
         req = entry["request"]
-        assert req.get("method") == "PUT", (
+        # Bundles use POST (create) rather than PUT (updateCreate) because
+        # the Prompt Opinion workspace FHIR — and strict FHIR servers more
+        # generally — have updateCreate disabled. The server assigns the
+        # logical id on create; intra-bundle references are rewritten
+        # server-side via fullUrl matching, so our demo-patient-a style
+        # references remain stable within one transaction.
+        assert req.get("method") == "POST", (
             f"entry[{i}] uses method={req.get('method')!r}; all demo bundle "
-            "entries use PUT so re-imports are idempotent (see README)."
+            "entries use POST so the transaction imports into FHIR servers "
+            "with updateCreate disabled (the PO workspace default)."
         )
 
 
