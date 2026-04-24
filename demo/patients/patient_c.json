@@ -1,0 +1,263 @@
+{
+  "resourceType": "Bundle",
+  "id": "demo-patient-c-bundle",
+  "type": "transaction",
+  "meta": {
+    "tag": [
+      {
+        "system": "https://priorauth-agent.example/tags",
+        "code": "demo-fixture",
+        "display": "Prior-auth demo FHIR fixture \u2014 Patient C (red-flag fast-track)"
+      }
+    ]
+  },
+  "entry": [
+    {
+      "fullUrl": "Patient/demo-patient-c",
+      "request": { "method": "PUT", "url": "Patient/demo-patient-c" },
+      "resource": {
+        "resourceType": "Patient",
+        "id": "demo-patient-c",
+        "name": [{ "use": "anonymous", "family": "Demo", "given": ["Catherine"] }],
+        "gender": "female",
+        "birthDate": "1964-07-15"
+      }
+    },
+    {
+      "fullUrl": "Condition/demo-patient-c-lbp",
+      "request": { "method": "PUT", "url": "Condition/demo-patient-c-lbp" },
+      "resource": {
+        "resourceType": "Condition",
+        "id": "demo-patient-c-lbp",
+        "clinicalStatus": {
+          "coding": [
+            {
+              "system": "http://terminology.hl7.org/CodeSystem/condition-clinical",
+              "code": "active"
+            }
+          ]
+        },
+        "verificationStatus": {
+          "coding": [
+            {
+              "system": "http://terminology.hl7.org/CodeSystem/condition-ver-status",
+              "code": "confirmed"
+            }
+          ]
+        },
+        "code": {
+          "coding": [
+            {
+              "system": "http://hl7.org/fhir/sid/icd-10-cm",
+              "code": "M54.51",
+              "display": "Vertebrogenic low back pain"
+            }
+          ]
+        },
+        "subject": { "reference": "Patient/demo-patient-c" },
+        "onsetDateTime": "2026-03-25",
+        "recordedDate": "2026-04-15"
+      }
+    },
+    {
+      "fullUrl": "Condition/demo-patient-c-hxca",
+      "request": { "method": "PUT", "url": "Condition/demo-patient-c-hxca" },
+      "resource": {
+        "resourceType": "Condition",
+        "id": "demo-patient-c-hxca",
+        "clinicalStatus": {
+          "coding": [
+            {
+              "system": "http://terminology.hl7.org/CodeSystem/condition-clinical",
+              "code": "active"
+            }
+          ]
+        },
+        "verificationStatus": {
+          "coding": [
+            {
+              "system": "http://terminology.hl7.org/CodeSystem/condition-ver-status",
+              "code": "confirmed"
+            }
+          ]
+        },
+        "code": {
+          "coding": [
+            {
+              "system": "http://hl7.org/fhir/sid/icd-10-cm",
+              "code": "Z85.3",
+              "display": "Personal history of malignant neoplasm of breast"
+            }
+          ]
+        },
+        "subject": { "reference": "Patient/demo-patient-c" },
+        "onsetDateTime": "2019-03-01",
+        "recordedDate": "2019-03-12"
+      }
+    },
+    {
+      "fullUrl": "Condition/demo-patient-c-uinc",
+      "request": { "method": "PUT", "url": "Condition/demo-patient-c-uinc" },
+      "resource": {
+        "resourceType": "Condition",
+        "id": "demo-patient-c-uinc",
+        "clinicalStatus": {
+          "coding": [
+            {
+              "system": "http://terminology.hl7.org/CodeSystem/condition-clinical",
+              "code": "active"
+            }
+          ]
+        },
+        "verificationStatus": {
+          "coding": [
+            {
+              "system": "http://terminology.hl7.org/CodeSystem/condition-ver-status",
+              "code": "confirmed"
+            }
+          ]
+        },
+        "code": {
+          "coding": [
+            {
+              "system": "http://hl7.org/fhir/sid/icd-10-cm",
+              "code": "R32",
+              "display": "Unspecified urinary incontinence"
+            }
+          ]
+        },
+        "subject": { "reference": "Patient/demo-patient-c" },
+        "onsetDateTime": "2026-04-13",
+        "recordedDate": "2026-04-15"
+      }
+    },
+    {
+      "fullUrl": "Condition/demo-patient-c-uret",
+      "request": { "method": "PUT", "url": "Condition/demo-patient-c-uret" },
+      "resource": {
+        "resourceType": "Condition",
+        "id": "demo-patient-c-uret",
+        "clinicalStatus": {
+          "coding": [
+            {
+              "system": "http://terminology.hl7.org/CodeSystem/condition-clinical",
+              "code": "active"
+            }
+          ]
+        },
+        "verificationStatus": {
+          "coding": [
+            {
+              "system": "http://terminology.hl7.org/CodeSystem/condition-ver-status",
+              "code": "confirmed"
+            }
+          ]
+        },
+        "code": {
+          "coding": [
+            {
+              "system": "http://hl7.org/fhir/sid/icd-10-cm",
+              "code": "R33.9",
+              "display": "Retention of urine, unspecified"
+            }
+          ]
+        },
+        "subject": { "reference": "Patient/demo-patient-c" },
+        "onsetDateTime": "2026-04-13",
+        "recordedDate": "2026-04-15"
+      }
+    },
+    {
+      "fullUrl": "ServiceRequest/demo-patient-c-sr-72148",
+      "request": {
+        "method": "PUT",
+        "url": "ServiceRequest/demo-patient-c-sr-72148"
+      },
+      "resource": {
+        "resourceType": "ServiceRequest",
+        "id": "demo-patient-c-sr-72148",
+        "status": "active",
+        "intent": "order",
+        "priority": "stat",
+        "authoredOn": "2026-04-15",
+        "subject": { "reference": "Patient/demo-patient-c" },
+        "requester": {
+          "display": "Dr. Priya Patel, MD"
+        },
+        "code": {
+          "coding": [
+            {
+              "system": "http://www.ama-assn.org/go/cpt",
+              "code": "72148",
+              "display": "MRI, lumbar spine; without contrast material"
+            }
+          ]
+        },
+        "reasonCode": [
+          {
+            "coding": [
+              {
+                "system": "http://hl7.org/fhir/sid/icd-10-cm",
+                "code": "M54.51",
+                "display": "Vertebrogenic low back pain"
+              }
+            ]
+          },
+          {
+            "coding": [
+              {
+                "system": "http://hl7.org/fhir/sid/icd-10-cm",
+                "code": "Z85.3",
+                "display": "Personal history of malignant neoplasm of breast"
+              }
+            ]
+          },
+          {
+            "coding": [
+              {
+                "system": "http://hl7.org/fhir/sid/icd-10-cm",
+                "code": "R32",
+                "display": "Unspecified urinary incontinence"
+              }
+            ]
+          },
+          {
+            "coding": [
+              {
+                "system": "http://hl7.org/fhir/sid/icd-10-cm",
+                "code": "R33.9",
+                "display": "Retention of urine, unspecified"
+              }
+            ]
+          }
+        ]
+      }
+    },
+    {
+      "fullUrl": "Coverage/demo-patient-c-cov",
+      "request": { "method": "PUT", "url": "Coverage/demo-patient-c-cov" },
+      "resource": {
+        "resourceType": "Coverage",
+        "id": "demo-patient-c-cov",
+        "status": "active",
+        "beneficiary": { "reference": "Patient/demo-patient-c" },
+        "payor": [{ "display": "Aetna" }],
+        "subscriberId": "DEMO-C-99903",
+        "class": [
+          {
+            "type": {
+              "coding": [
+                {
+                  "system": "http://terminology.hl7.org/CodeSystem/coverage-class",
+                  "code": "plan"
+                }
+              ]
+            },
+            "value": "Aetna HMO",
+            "name": "Aetna HMO"
+          }
+        ]
+      }
+    }
+  ]
+}
