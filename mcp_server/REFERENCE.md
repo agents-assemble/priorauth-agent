@@ -31,6 +31,17 @@ per-file docstrings plus this log.
 | `python/main.py` | `mcp_server/main.py` | Same lifespan-based session manager + streamable_http mount; we add `MCP_ALLOWED_ORIGINS` env to tighten CORS beyond dev. |
 | `python/mcp_utilities.py` | _(not adopted)_ | Upstream's `create_text_response` helper raises when is_error — incompatible with our Pydantic return contract. Tools raise `FhirContextError` instead. |
 
+## Files with no upstream equivalent
+
+These are fully authored locally — no upstream reference. Listed here so
+future syncs don't accidentally treat them as adapted code:
+
+- `mcp_server/fhir/extractors.py` — FHIR R4 → `shared.models` mapping
+  layer. Upstream returns plain strings from each tool and never normalises
+  RxNorm / CPT / ICD-10 into a typed shape. The kind-taxonomy and red-flag
+  ICD maps here are the on-the-wire contract with `mcp_server/criteria/`
+  (PR #8) — change them together or pin explicit cross-file tests.
+
 ## What we did NOT copy
 
 - `python/tools/patient_age_tool.py`, `patient_allergies_tool.py`,
