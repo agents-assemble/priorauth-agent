@@ -21,6 +21,7 @@ import os
 import sys
 import warnings
 from pathlib import Path
+from typing import Any
 
 import google.generativeai as genai
 from dotenv import load_dotenv
@@ -75,7 +76,7 @@ CRITERIA_AND_LETTER_PROMPT = "\n".join(
 )
 
 
-def run_case(model: object, title: str, note_text: str) -> str:
+def run_case(model: Any, title: str, note_text: str) -> str:
     """Call Gemini; return text."""
     full_prompt = f"{CRITERIA_AND_LETTER_PROMPT}\n---\n## Clinical note ({title})\n\n{note_text}\n"
     generation_config = genai.types.GenerationConfig(
@@ -89,7 +90,7 @@ def run_case(model: object, title: str, note_text: str) -> str:
     text = getattr(resp, "text", None)
     if not text:
         raise RuntimeError(f"Empty response for {title!r}")
-    return text
+    return str(text)
 
 
 def main() -> int:
@@ -112,8 +113,8 @@ def main() -> int:
 
     model_name = os.environ.get("GEMINI_MODEL", "gemini-2.5-flash").strip()
 
-    genai.configure(api_key=api_key)
-    model = genai.GenerativeModel(model_name)
+    genai.configure(api_key=api_key)  # type: ignore[attr-defined]
+    model = genai.GenerativeModel(model_name)  # type: ignore[attr-defined]
 
     cases: list[tuple[str, str, str]] = [
         (

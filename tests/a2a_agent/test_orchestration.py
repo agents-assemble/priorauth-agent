@@ -2,6 +2,11 @@
 
 from __future__ import annotations
 
+from a2a_agent.orchestration import (
+    MCP_TOOL_BY_SUB_AGENT,
+    ORCHESTRATOR_INSTRUCTION_V1,
+    SUB_AGENT_HANDOFF_ORDER,
+)
 from shared.models import (
     Coverage,
     CriteriaResult,
@@ -10,12 +15,6 @@ from shared.models import (
     PALetter,
     PatientContext,
     ServiceRequest,
-)
-
-from a2a_agent.orchestration import (
-    MCP_TOOL_BY_SUB_AGENT,
-    ORCHESTRATOR_INSTRUCTION_V1,
-    SUB_AGENT_HANDOFF_ORDER,
 )
 
 

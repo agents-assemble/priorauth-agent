@@ -88,7 +88,7 @@ Wait until both are listening before you register tunnels and PO.
 ## 5. Expose to the internet (two tunnels)
 
 PO runs in the cloud; it must reach your laptop. Free-tier default in this
-repo: **Cloudflare** for MCP and **ngrok** for A2A** (avoids a single static
+repo: **Cloudflare** for MCP and **ngrok** for **A2A** (avoids a single static
 name binding to two ports — see `ngrok.example.yml` and `make tunnels`).
 
 **Terminal 3 — MCP tunnel (→ :8000)**
