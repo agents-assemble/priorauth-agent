@@ -4,9 +4,9 @@ This module is the **single place** for handoff order and MCP tool names while
 Kevin wires ``match_payer_criteria`` / ``generate_pa_letter`` and Sanjit
 promotes the ADK root + sub-agents from Week-1 stubs.
 
-``root_agent`` in ``a2a_agent.agent`` still uses the Week-1 instruction until a
-dedicated PR swaps ``instruction=`` to ``ORCHESTRATOR_INSTRUCTION_V1`` and
-enables real ``transfer_to_*`` routing with bound tools.
+``root_agent`` uses a Week-1 or MCP-enabled instruction in ``a2a_agent.agent``
+(see ``_root_instruction``) when tools are present; a future pass may point it
+at ``ORCHESTRATOR_INSTRUCTION_V1`` and explicit transfer routing.
 """
 
 from __future__ import annotations
