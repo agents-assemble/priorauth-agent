@@ -15,6 +15,12 @@ the upstream PO reference repo we forked from.
 # session) cannot silently override the real generated key. Harmless in prod
 # containers — there is no .env file baked into the image, so load_dotenv
 # returns False and env stays whatever fly.toml / docker-compose set.
+import os
+
 from dotenv import load_dotenv
 
 load_dotenv(override=True)
+# Pytest: see tests/conftest.py — do not let .env turn on MCP tool wiring
+# for patient_context when running Week-1 guardrail tests.
+if os.environ.get("A2A_TESTING_NO_MCP") == "1":
+    os.environ.pop("MCP_SERVER_URL", None)

@@ -105,6 +105,14 @@ On Windows without `make`:
 pwsh -File scripts/tunnels.ps1
 ```
 
+## Week 2 — orchestration (Person B)
+
+Handoff order, MCP tool names, and a **draft** root orchestrator instruction live in [`orchestration.py`](orchestration.py). `agent.py` still runs the **Week 1** root prompt until a follow-up PR swaps `instruction=` to `ORCHESTRATOR_INSTRUCTION_V1` and enables real sub-agent transfers with Kevin’s MCP tools bound.
+
+### `patient_context` + MCP (step 1)
+
+Set **`MCP_SERVER_URL`** in `.env` to the full MCP JSON-RPC URL (e.g. `http://localhost:8000/mcp`). The `patient_context` sub-agent then loads a Google ADK [`McpToolset`](https://github.com/google/adk-python) for **`fetch_patient_context`**, with `x-fhir-server-url` / `x-fhir-access-token` taken from the same session state the FHIR hook writes when PO sends SHARP context. `criteria_evaluator` and `pa_letter` are still unbound until their tools exist on the MCP server.
+
 ## Planned follow-up PRs
 
 - `a2a_agent/sub-agents` — add Patient Context / Criteria Evaluator / PA Letter as nested ADK agents once `shared.models` contracts are stable (Week 2 Day 2-4).

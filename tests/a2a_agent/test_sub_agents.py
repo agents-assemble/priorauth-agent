@@ -12,6 +12,7 @@ from __future__ import annotations
 
 from a2a_agent.agent import root_agent
 from google.adk.agents import LlmAgent
+from google.adk.tools.mcp_tool import McpToolset
 
 _EXPECTED_SUB_AGENT_NAMES = {
     "patient_context",
@@ -42,21 +43,33 @@ def test_sub_agent_names_match_expected_set() -> None:
 
 
 def test_sub_agents_have_no_tools_wired_yet() -> None:
-    """Week-1 guardrail: MCP bindings land in their own per-tool PRs.
+    """Week-1 guardrail: only ``patient_context`` may attach MCP; others stay empty in CI.
 
-    If a future Week-2 diff accidentally wires an MCP tool onto a sub-agent
-    before its dedicated PR (``match_payer_criteria``, ``generate_pa_letter``)
-    lands, this test fails loudly. That is intentional -- the per-tool PRs
-    are where reviewers look for tool-binding regressions.
+    In production dev, ``patient_context`` can carry a :class:`McpToolset` for
+    ``fetch_patient_context`` when ``MCP_SERVER_URL`` is set. Pytest forces
+    ``A2A_TESTING_NO_MCP`` so the default is still all-empty here.
+
+    ``criteria_evaluator`` and ``pa_letter`` must not gain tools until their
+    Week-2 MCP tool PRs land.
     """
 
     for sub in root_agent.sub_agents:
         assert isinstance(sub, LlmAgent), (
             f"sub-agent {sub.name!r} is not an LlmAgent: {type(sub).__name__}"
         )
+        if sub.name == "patient_context":
+            if not sub.tools:
+                continue
+            assert len(sub.tools) == 1, (
+                f"patient_context must use a single McpToolset, got {sub.tools!r}"
+            )
+            assert isinstance(sub.tools[0], McpToolset), (
+                f"expected McpToolset on patient_context, got {type(sub.tools[0])!r}"
+            )
+            continue
         assert sub.tools == [], (
             f"sub-agent {sub.name!r} has unexpected tools wired: {sub.tools!r} "
-            "-- Week-2 tool bindings must land in their own PRs, not here."
+            "-- only patient_context is wired in Week-2 / fetch_patient_context first."
         )
 
 
@@ -91,10 +104,16 @@ def test_sub_agents_carry_week_1_stub_instruction() -> None:
             f"({type(instruction).__name__}); Week-1 stubs must be literal "
             "strings so the sentinel check below is meaningful."
         )
-        assert sentinel in instruction, (
-            f"sub-agent {sub.name!r} is missing the Week-1 stub sentinel "
-            f"'{sentinel}'. Either the production PLAN.md instruction was "
-            "promoted without also binding an MCP tool (see "
-            "test_sub_agents_have_no_tools_wired_yet), or the stub was "
-            "edited without updating this guardrail. See PR #13 review."
-        )
+        if sub.name == "patient_context" and sub.tools:
+            assert sentinel not in instruction, (
+                "patient_context with MCP must use production instruction, not Week-1 stub"
+            )
+            assert "Clinical data retrieval specialist" in instruction
+        else:
+            assert sentinel in instruction, (
+                f"sub-agent {sub.name!r} is missing the Week-1 stub sentinel "
+                f"'{sentinel}'. Either the production PLAN.md instruction was "
+                "promoted without also binding an MCP tool (see "
+                "test_sub_agents_have_no_tools_wired_yet), or the stub was "
+                "edited without updating this guardrail. See PR #13 review."
+            )

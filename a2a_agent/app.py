@@ -11,11 +11,14 @@ Agent card (public, no auth):
 All other endpoints require the X-API-Key header (set via AGENT_API_KEY in
 your local .env). Prompt Opinion uses this key when calling us after registration.
 
-For the Week-1 Platform Spike we advertise the FHIR scopes we'll eventually
-need so PO can exercise the FHIR-metadata flow end-to-end, even though the
-spike agent itself has no tools yet. This lets us validate the full round-trip
+For the Week-1 Platform Spike we advertised the FHIR scopes so PO could
+exercise the FHIR-metadata flow end-to-end. The ``patient_context`` sub-agent
+can now call ``fetch_patient_context`` via MCP when ``MCP_SERVER_URL`` is set
+(see ``a2a_agent/mcp_patient_context.py``); other sub-agents remain Week-2.
+This lets us validate the full round-trip
 (PO chat -> our agent card -> X-API-Key call -> FHIR-metadata extraction ->
-Gemini -> response) before adding MCP tools.
+Gemini -> response) as we wire the remaining MCP tools and orchestrator
+handoffs.
 """
 
 from __future__ import annotations

@@ -32,6 +32,7 @@ import os
 from google.adk.agents import Agent
 
 from a2a_agent._model import _DEFAULT_MODEL
+from a2a_agent.mcp_patient_context import patient_context_mcp_toolsets
 
 _WEEK_2_INSTRUCTION = (
     "Clinical data retrieval specialist. Given a patient and requested "
@@ -48,6 +49,7 @@ _WEEK_1_STUB_INSTRUCTION = (
     "in the Week-2 tool-binding PR."
 )
 
+_patient_mcp = patient_context_mcp_toolsets()
 patient_context_agent = Agent(
     name="patient_context",
     model=os.environ.get("GEMINI_MODEL", _DEFAULT_MODEL),
@@ -57,6 +59,6 @@ patient_context_agent = Agent(
         "therapy trials, imaging history, red flags) from FHIR for a given "
         "patient and requested service."
     ),
-    instruction=_WEEK_1_STUB_INSTRUCTION,
-    tools=[],
+    instruction=_WEEK_2_INSTRUCTION if _patient_mcp else _WEEK_1_STUB_INSTRUCTION,
+    tools=_patient_mcp,
 )

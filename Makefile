@@ -3,7 +3,7 @@
 SHELL := /bin/sh
 .DEFAULT_GOAL := help
 
-.PHONY: help install dev stop agent mcp ngrok cf-tunnel tunnels agent-card mcp-initialize mcp-fetch-patient check lint format typecheck test test-fast integration clean
+.PHONY: help install dev stop agent mcp ngrok cf-tunnel tunnels agent-card mcp-initialize mcp-fetch-patient week2-capability check lint format typecheck test test-fast integration clean
 
 help: ## Show this help
 	@awk 'BEGIN {FS = ":.*##"; printf "\nUsage:\n  make \033[36m<target>\033[0m\n\nTargets:\n"} /^[a-zA-Z_-]+:.*?##/ { printf "  \033[36m%-15s\033[0m %s\n", $$1, $$2 }' $(MAKEFILE_LIST)
@@ -51,6 +51,9 @@ mcp-initialize: ## Send the MCP initialize handshake to localhost:8000 (server m
 		-H 'Content-Type: application/json' \
 		-d '{"jsonrpc":"2.0","id":1,"method":"initialize","params":{"protocolVersion":"2025-06-18","capabilities":{},"clientInfo":{"name":"curl","version":"1.0"}}}'
 	@echo
+
+week2-capability: ## Week 2 Day 1 — Flash Lite criteria + letter check (uses demo notes; GOOGLE_API_KEY in .env)
+	uv run python scripts/week2_capability_check.py
 
 mcp-fetch-patient: ## Live-curl fetch_patient_context against PO workspace (set FHIR_URL, FHIR_TOKEN, PATIENT_ID)
 	@test -n "$(FHIR_URL)" || (echo "FHIR_URL is required" && exit 1)

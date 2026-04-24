@@ -8,9 +8,10 @@ tweaks as per-file diffs instead of an ``agent.py`` churn-fest.
 Week-1 invariants (pinned by ``tests/a2a_agent/test_sub_agents.py``):
 - Exactly three sub-agents: ``patient_context``, ``criteria_evaluator``,
   ``pa_letter``.
-- Each carries ``tools=[]`` — if a future PR accidentally wires an MCP tool
-  onto a sub-agent before its own dedicated PR lands, the guardrail test
-  fails loudly.
+- ``criteria_evaluator`` and ``pa_letter`` keep ``tools=[]`` until their MCP
+  tools land. ``patient_context`` may attach a :class:`McpToolset` when
+  ``MCP_SERVER_URL`` is set (``fetch_patient_context``); pytest clears that
+  env so guardrails stay deterministic.
 - Each shares the root agent's ``_DEFAULT_MODEL`` (single source of truth)
   and the same ``GEMINI_MODEL`` env override, so a capability-check escalation
   (bigger Gemini tier) flips all four agents in one env-var change.
