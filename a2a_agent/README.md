@@ -46,17 +46,47 @@ a2a_agent/
 From the repo root, after `uv sync --all-extras --dev`:
 
 ```bash
-# 1. Start the agent on :8001
+# 1. Start the MCP server on :8000 (new terminal; needed for tool calls in Week-2+)
+make mcp
+
+# 2. Start the A2A agent on :8001 (new terminal)
 make agent
 
-# 2. (new terminal) Verify the agent card
+# 3. (new terminal) Verify the agent card
 make agent-card
-
-# 3. (new terminal) Expose via ngrok for PO registration
-make ngrok
 ```
 
 Requires `.env` at repo root with at minimum `GOOGLE_API_KEY` and `AGENT_API_KEY` set. See root `.env.example` for the full list.
+
+### Exposing to Prompt Opinion (two ngrok tunnels)
+
+When registering in a live PO workspace, the **MCP server** and the **A2A agent** need **separate public HTTPS URLs** — one tunnel per local port. See GitHub issue [#17](https://github.com/agents-assemble/priorauth-agent/issues/17) for the debug history that motivated this layout.
+
+- **A2A agent** (this service): PO's External Agents UI takes the public base — no path. `AGENT_PUBLIC_URL` in `.env` must match that same base so the agent card's `url` and `supportedInterfaces[].url` fields point at the public host (see [`a2a_agent/app.py`](app.py), which reads `AGENT_PUBLIC_URL` / `BASE_URL` when building the card).
+- **MCP server**: PO's Server Hub takes the public URL **plus** the `/mcp` path — e.g. `https://<mcp-host>/mcp`. See [`../mcp_server/README.md`](../mcp_server/README.md) for the MCP-side setup.
+
+Running both tunnels from one config file (so they can't race over the same hostname / trigger `ERR_NGROK_334`):
+
+```bash
+# One-time setup
+cp ngrok.example.yml ngrok.yml
+# Edit ngrok.yml: set agent.authtoken (from https://dashboard.ngrok.com) +
+# replace YOUR-RESERVED-HOST.ngrok-free.dev with your reserved domain (or
+# remove the url: line to get a random hostname on both endpoints).
+
+# Every session
+make ngrok-all       # or: ngrok start --all --config ngrok.yml
+```
+
+The ngrok dashboard (`http://localhost:4040`) will show two forwarding lines — one per service. Copy the `a2a` endpoint's public URL into PO's External Agents UI **and** paste it into `AGENT_PUBLIC_URL` in `.env`, then restart the agent (`make agent`) so the re-generated card reflects the new base.
+
+If you don't have `make` (e.g. fresh Windows setup), use the PowerShell wrapper:
+
+```powershell
+pwsh -File scripts/ngrok-all.ps1
+```
+
+The single-tunnel `make ngrok` target is kept as a local-smoke convenience for iterating on the A2A app alone (e.g. `make agent-card` through a public URL), but it **must not** be used for PO round-trips — the MCP server won't be reachable and FHIR calls from the agent will fail.
 
 ## Planned follow-up PRs
 

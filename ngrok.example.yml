@@ -1,0 +1,66 @@
+# ngrok v3 multi-endpoint config for local dev.
+#
+# Purpose
+# -------
+# Our stack needs TWO distinct public HTTPS URLs when testing against a live
+# Prompt Opinion workspace (see GitHub issue #17):
+#
+#   1. MCP server (FastMCP) on local 127.0.0.1:8000 — JSON-RPC path `/mcp`.
+#      Registered in the PO workspace Server Hub as
+#      `https://<mcp-public-host>/mcp`.
+#
+#   2. A2A agent (Google ADK) on local 127.0.0.1:8001 — agent card at
+#      `/.well-known/agent-card.json`. Registered in the PO workspace
+#      External Agents UI as `https://<a2a-public-host>/` (base only, no
+#      path). The same base must also be set as `AGENT_PUBLIC_URL` in
+#      `.env` so the agent card's `url` and `supportedInterfaces[].url`
+#      fields point at the public host rather than `localhost:8001`.
+#
+# One ngrok HTTPS endpoint forwards to exactly one upstream. Running
+# `ngrok http 8000` and `ngrok http 8001` as ad-hoc commands will both
+# try to bind the same default (or reserved) hostname and fail with
+# `ERR_NGROK_334`, or silently route all traffic to whichever endpoint
+# won the race. This file defines both endpoints explicitly and is
+# started with `make ngrok-all` / `scripts/ngrok-all.ps1`.
+#
+# Setup
+# -----
+# 1. Copy this file:      cp ngrok.example.yml ngrok.yml
+#    (ngrok.yml is gitignored — safe for secrets + your reserved host.)
+# 2. Set `agent.authtoken` to your personal ngrok authtoken from
+#    https://dashboard.ngrok.com (or export NGROK_AUTHTOKEN and leave
+#    the literal `${NGROK_AUTHTOKEN}` below — ngrok expands it).
+# 3. Replace `YOUR-RESERVED-HOST.ngrok-free.dev` with your reserved
+#    free-tier domain (create one at
+#    https://dashboard.ngrok.com/cloud-edge/domains). If you don't have
+#    a reserved domain, delete the `url:` line on the `mcp` endpoint
+#    entirely — ngrok will assign a random hostname per run, and you'll
+#    need to re-register the MCP URL in the PO workspace Server Hub on
+#    every restart.
+# 4. Start both tunnels:  make ngrok-all
+#    (Windows)             pwsh -File scripts/ngrok-all.ps1
+#
+# Convention in this repo: the reserved (stable) domain is given to the
+# MCP endpoint so the PO workspace Server Hub registration survives
+# `ngrok` restarts. The A2A endpoint gets a fresh random hostname per
+# run — re-register + restart the agent with the new
+# `AGENT_PUBLIC_URL` as part of any live-smoke workflow. Swap the two
+# if your workflow prefers a stable A2A URL instead (just move `url:`
+# to the other endpoint).
+
+version: "3"
+
+agent:
+  authtoken: ${NGROK_AUTHTOKEN}
+
+endpoints:
+  - name: mcp
+    description: "FastMCP JSON-RPC — PO Server Hub registers this + /mcp"
+    url: https://YOUR-RESERVED-HOST.ngrok-free.dev
+    upstream:
+      url: http://127.0.0.1:8000
+
+  - name: a2a
+    description: "A2A agent card + JSON-RPC — PO External Agents UI target"
+    upstream:
+      url: http://127.0.0.1:8001

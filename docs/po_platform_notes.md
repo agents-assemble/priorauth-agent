@@ -8,6 +8,24 @@ Newest entries at the top. Link to specific PO docs / support threads / Discord 
 
 ---
 
+## 2026-04-24 — MCP (:8000) and A2A (:8001) MUST be registered under distinct public hostnames
+
+**Context**: Registering both services in one PO workspace. The MCP server goes in the workspace Server Hub (`https://<host>/mcp`); the A2A agent goes in the External Agents UI as a base URL (no path). During Sanjit's Week-1 round-trip a single reserved ngrok hostname was accidentally pointed at both `:8000` and `:8001` — either via ad-hoc `ngrok http <port>` invocations reusing the same default hostname, or via the terminal UI briefly showing two forwarding lines with the same public host mapping to both ports.
+
+**Observation**: Symptoms from the one-host-two-ports misconfig:
+
+- `ngrok http 8001` after `ngrok http 8000` (or vice versa) when the authtoken pins a reserved hostname → `ERR_NGROK_334` on the second process.
+- If the race goes the other way, ngrok binds the reserved host to exactly one of the two upstreams (whichever process won). PO's other-service calls then land on the wrong app: the A2A agent card fetch (`GET /.well-known/agent-card.json`) comes back as an MCP 404, or PO's MCP `initialize` JSON-RPC hits the A2A agent and returns an unrelated payload.
+- One ngrok HTTPS endpoint maps to exactly one upstream. The `ngrok http` CLI does not support path-based routing on a single hostname across two local ports — if you need two services publicly reachable, you need two endpoints.
+
+**Explanation / workaround**: Ship a checked-in `ngrok.example.yml` (v3) in the repo root with two `endpoints` blocks — one with `url:` set to a reserved domain (stable; registered in PO Server Hub as `<host>/mcp`) forwarding to `127.0.0.1:8000`, one without `url:` (random hostname per run; copied into PO External Agents + `AGENT_PUBLIC_URL` at the start of each session) forwarding to `127.0.0.1:8001`. Drive both from `make ngrok-all` (Linux/macOS) or `pwsh -File scripts/ngrok-all.ps1` (Windows). `ngrok.yml` is gitignored; the example lives at `ngrok.example.yml`. Which service gets the reserved hostname is a workflow choice — the repo default pins MCP to the reserved host so the Server Hub registration survives restarts; flip it to A2A if your iteration loop is agent-side.
+
+**Impact**: New files: `ngrok.example.yml`, `scripts/ngrok-all.ps1`. Makefile target: `ngrok-all` (the old single-port `ngrok` target stays as a convenience for A2A-only smoke, with a "don't use for PO round-trips" warning in `make help`). Docs updated in `a2a_agent/README.md`, `mcp_server/README.md`, and `.env.example` (stricter AGENT_PUBLIC_URL vs MCP_SERVER_URL comments clarifying the two hostnames must differ when PO-registered). Rule of thumb: **one hostname per local port, always**. If you're ever tempted to fuse them behind one hostname via a reverse proxy with path-based routing, MCP's `/mcp` + A2A's `/.well-known/*` don't collide — but the agent card's `url` field also needs the trailing-slash base, and PO's v1 cardschema validator has rejected hosts that serve anything other than an agent card at `/`. Not worth the fragility; keep them separate.
+
+**Source**: Observed 2026-04-24 during Kevin's follow-up on Sanjit's Week-1 spike report. GitHub issue [#17](https://github.com/agents-assemble/priorauth-agent/issues/17) has the original debug trace. ngrok v3 multi-endpoint config spec: [ngrok.com/docs/agent/config/v3/](https://ngrok.com/docs/agent/config/v3/). `ERR_NGROK_334` reference: [ngrok.com/docs/errors/err_ngrok_334/](https://ngrok.com/docs/errors/err_ngrok_334/).
+
+---
+
 ## 2026-04-23 — Workspace FHIR `updateCreate` is disabled → bundles must POST, not PUT
 
 **Context**: Week-1 import of `demo/patients/patient_a.json` (15-entry transaction bundle) into the PO workspace via the Patients → Import FHIR bundle UI. Every bundle entry shipped in PR #14 used `request.method: "PUT"` with a client-assigned id (`PUT /Patient/demo-patient-a`, `PUT /Condition/demo-patient-a-lbp-radic`, etc.) — the usual idempotent-re-seed shape.

@@ -3,7 +3,7 @@
 SHELL := /bin/sh
 .DEFAULT_GOAL := help
 
-.PHONY: help install dev stop agent mcp ngrok agent-card mcp-initialize mcp-fetch-patient check lint format typecheck test test-fast integration clean
+.PHONY: help install dev stop agent mcp ngrok ngrok-all agent-card mcp-initialize mcp-fetch-patient check lint format typecheck test test-fast integration clean
 
 help: ## Show this help
 	@awk 'BEGIN {FS = ":.*##"; printf "\nUsage:\n  make \033[36m<target>\033[0m\n\nTargets:\n"} /^[a-zA-Z_-]+:.*?##/ { printf "  \033[36m%-15s\033[0m %s\n", $$1, $$2 }' $(MAKEFILE_LIST)
@@ -23,8 +23,13 @@ agent: ## Run the A2A agent locally on :8001 (reads .env)
 mcp: ## Run the MCP server locally on :8000 (reads .env)
 	uv run --package mcp_server uvicorn mcp_server.main:app --host 0.0.0.0 --port 8000 --log-level info --reload --env-file .env
 
-ngrok: ## Expose local :8001 via ngrok (requires NGROK_AUTHTOKEN in .env on first run)
+ngrok: ## Expose ONLY local :8001 (A2A) via ngrok — single-tunnel convenience; use ngrok-all for PO round-trips
 	ngrok http 8001
+
+ngrok-all: ## Start both tunnels from ngrok.yml (MCP :8000 + A2A :8001). Copy ngrok.example.yml first.
+	@test -f ngrok.yml || (echo "ngrok.yml not found. Copy ngrok.example.yml to ngrok.yml and fill in authtoken + reserved host." && exit 1)
+	ngrok config check --config ngrok.yml
+	ngrok start --all --config ngrok.yml
 
 agent-card: ## Fetch the local agent card (agent must be running via `make agent`)
 	curl -s http://localhost:8001/.well-known/agent-card.json | python -m json.tool
