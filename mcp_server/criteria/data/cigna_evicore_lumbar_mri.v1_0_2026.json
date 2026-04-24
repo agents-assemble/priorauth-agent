@@ -1,0 +1,111 @@
+{
+  "schema_version": "v1",
+  "payer_id": "cigna",
+  "payer_name": "Cigna (via eviCore by EVERNORTH)",
+  "policy_title": "Cigna Spine Imaging Guidelines",
+  "policy_version": "V1.0.2026",
+  "policy_effective_date": "2026-02-03",
+  "source_policy_url": "https://www.evicore.com/sites/default/files/clinical-guidelines/2025-10/Cigna_Spine%20Imaging%20Guidelines_V1.0.2026_eff02.03.2026_PUB10.29.2025.pdf",
+  "last_verified": "2026-04-23",
+
+  "service": {
+    "cpt_codes": ["72148"],
+    "description": "MRI lumbar spine without IV contrast. Default modality per eviCore for uncomplicated disc, nerve-root, and degenerative lumbar indications; contrast generally not needed."
+  },
+
+  "red_flags": [
+    {
+      "id": "cigna.redflag.motor_weakness",
+      "label": "Motor Weakness",
+      "canonical_labels": ["motor_weakness", "foot_drop", "progressive_motor_deficit", "bilateral_leg_weakness"],
+      "description": "New-onset manual motor weakness graded 3/5 or less of specified muscles; new-onset foot drop; new-onset bilateral lower-extremity weakness; or progressive objective motor/sensory/reflex deficits on re-evaluation.",
+      "source_section": "SP-1.2 Motor Weakness"
+    },
+    {
+      "id": "cigna.redflag.aortic_aneurysm_or_dissection",
+      "label": "Aortic Aneurysm or Dissection",
+      "canonical_labels": ["aortic_aneurysm", "aortic_dissection"],
+      "description": "New-onset back/abdominal pain in a patient with known AAA, or clinical suspicion of acute aortic dissection. Policy notes spine imaging is not the correct study and refers to PVD guideline.",
+      "source_section": "SP-1.2 Aortic Aneurysm or Dissection"
+    },
+    {
+      "id": "cigna.redflag.cancer",
+      "label": "Cancer",
+      "canonical_labels": ["cancer", "suspected_spinal_malignancy", "history_of_cancer", "spinal_metastases"],
+      "description": "Clinical suspicion of spinal malignancy plus one or more of: night pain, uncontrolled/unintended weight loss, pain unrelieved by position change, age over 70, or severe/worsening spinal pain; or any patient with known cancer history and back pain.",
+      "source_section": "SP-1.2 Cancer"
+    },
+    {
+      "id": "cigna.redflag.cauda_equina",
+      "label": "Cauda Equina Syndrome",
+      "canonical_labels": ["cauda_equina_syndrome", "saddle_anesthesia", "bowel_bladder_dysfunction", "acute_urinary_retention"],
+      "description": "Acute bilateral sciatica, perineal (\"saddle\") sensory loss, decreased anal sphincter tone, new bowel/bladder incontinence, or otherwise unexplained acute urinary retention.",
+      "source_section": "SP-1.2 Cauda Equina Syndrome"
+    },
+    {
+      "id": "cigna.redflag.fracture",
+      "label": "Fracture",
+      "canonical_labels": ["fracture", "pathological_fracture", "post_trauma_fracture", "ankylosing_spondylitis_fracture"],
+      "description": "Clinical suspicion of pathological fracture, post-trauma fracture, or fracture in ankylosing spondylitis / DISH.",
+      "source_section": "SP-1.2 Fracture"
+    },
+    {
+      "id": "cigna.redflag.infection",
+      "label": "Infection",
+      "canonical_labels": ["spinal_infection", "epidural_abscess", "osteomyelitis", "discitis"],
+      "description": "Suspicion of disc-space infection, epidural abscess, or spinal osteomyelitis plus any of: fever, IV drug use, recent bacterial infection, recent spinal intervention, immunocompromise, chronic steroids, transplant on anti-rejection meds, diabetes, HIV/AIDS, chronic dialysis, immunosuppressant therapy, neoplastic spine involvement, suggestive labs (WBC/ESR/CRP/cultures), decubitus ulcer over spine, abnormal x-ray/CT, new neurologic deficit, or cauda equina.",
+      "source_section": "SP-1.2 Infection"
+    },
+    {
+      "id": "cigna.redflag.severe_radicular_pain",
+      "label": "Severe Radicular Pain",
+      "canonical_labels": ["severe_radicular_pain"],
+      "description": "Severe radicular pain in a defined nerve-root distribution (minimum 9/10 VAS), documented significant functional loss, unresponsive to at least seven days of provider-directed treatment, and a documented plan for transforaminal ESI (any level), interlaminar ESI (cervical or thoracic only), urgent/emergent spine surgery, or urgent/emergent referral to interventional pain or spine surgery.",
+      "source_section": "SP-1.2 Severe Radicular Pain"
+    }
+  ],
+
+  "conservative_therapy": {
+    "pathways": [
+      {
+        "id": "cigna.pathway.lumbar_default_6wk",
+        "applies_when": "default",
+        "weeks": 6,
+        "description": "Six-week trial of provider-directed treatment that begins after the current episode of symptoms or exam findings started or changed, plus a clinical re-evaluation after that trial before MRI is authorized. Threshold is expressed as failed-therapy duration, not pure symptom duration. Applies uniformly to uncomplicated low back pain (SP-5.1) and low back pain with neurologic features / radiculopathy (SP-6.1).",
+        "source_section": "SP-1.0 / SP-5.1 / SP-6.1"
+      }
+    ],
+    "accepted_kinds": [
+      "ACTIVITY_MODIFICATION",
+      "EDUCATION",
+      "NSAID",
+      "ANALGESIC_NON_OPIOID",
+      "ANALGESIC_OPIOID",
+      "MUSCLE_RELAXANT",
+      "ORAL_CORTICOSTEROID",
+      "EPIDURAL_INJECTION",
+      "PHYSICAL_THERAPY",
+      "OCCUPATIONAL_THERAPY",
+      "SPINAL_MANIPULATION",
+      "HOME_EXERCISE"
+    ],
+    "min_kinds_count": 1,
+    "notes": "SP-1.0 describes provider-directed treatment as an open \"may include\" list, not an AND-set; policy does not require a specific subset. HOME_EXERCISE must be provider-directed (self-directed YouTube stretches do NOT qualify). GABAPENTINOID is deliberately NOT in accepted_kinds — Cigna does not name gabapentinoids explicitly, and the taxonomy doc flags this as a clinician-review gap for Week 3. ANALGESIC_OPIOID is accepted because SP-1.0 names \"narcotic analgesic medications\", but a future engine revision may weight opioid-only trials differently."
+  },
+
+  "prior_imaging": {
+    "has_hard_lookback_window": false,
+    "lookback_months": null,
+    "narrative": "No bright-line lookback window. SP-1.0 states repeat advanced imaging \"should be carefully considered and may not be medically necessary if prior advanced diagnostic imaging has been performed\" and that serial surveillance imaging is unsupported for most spinal disorders. Repeat may be considered case-by-case (fracture delayed/non-union, fusion pseudoarthrosis). SP-1.3 separately uses a 12-month window as the validity period for a prior MRI/CT or EMG/NCV that establishes the \"radiculopathy\" definition — this is NOT a disqualifier for a new MRI."
+  },
+
+  "coverage_gating": {
+    "covered_icd_patterns": [],
+    "excluded_icd_patterns": [],
+    "excluded_scope": null,
+    "age_min": null,
+    "age_max": null
+  },
+
+  "notes": "Additional policy requirements not yet encoded as rule-engine inputs (will surface in reasoning trace only for v1): (1) in-person clinical evaluation mandatory before advanced imaging — telehealth alone does not satisfy the initial/recurrent eval; telephone/email/telemedicine/messaging DO satisfy the required re-evaluation after the 6-week trial. (2) Plain x-rays required before MRI for specific situations (compression fractures, spondylolysis/spondylolisthesis, inflammatory spondylitis, SI pain, coccydynia, post-op workup). (3) Positional / dynamic / weight-bearing MRI not medically necessary. (4) Pediatric patients covered by a separate Pediatric and Special Populations Spine Imaging Guidelines document."
+}
