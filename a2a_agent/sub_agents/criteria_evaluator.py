@@ -1,16 +1,16 @@
 """Criteria Evaluator sub-agent — prior-authorization criteria evaluator.
 
-Week-1 scope: pass-through stub. The production instruction (PLAN.md:234)
-is preserved verbatim in ``_WEEK_2_INSTRUCTION`` below. The active
-instruction is a Week-1 stub that explicitly forbids fabrication — same
-defense-in-depth rationale as ``patient_context`` (see that module's
-docstring for the full reasoning, anchored in the PR #9 confabulation
-bug and PR #13 review).
+Without ``MCP_SERVER_URL`` this sub-agent is a pass-through stub
+(``tools=[]`` + Week-1 stub instruction). The production line (PLAN.md:234) is
+in ``_WEEK_2_INSTRUCTION``; with MCP, ``criteria_evaluator_mcp_toolsets()`` binds
+``match_payer_criteria``. Same anti-confabulation pattern as
+``patient_context`` (see its docstring, PR #9 / PR #13).
 
-Week-2 swap is two lines:
+Week-2 binding (MCP when ``MCP_SERVER_URL`` is set — see
+``a2a_agent.mcp_patient_context.criteria_evaluator_mcp_toolsets``):
 
     instruction=_WEEK_2_INSTRUCTION
-    tools=[match_payer_criteria]
+    tools=criteria_evaluator_mcp_toolsets()
 
 See ``a2a_agent/sub_agents/__init__.py`` for the re-export surface consumed
 by ``a2a_agent.agent.root_agent.sub_agents``.
@@ -23,6 +23,7 @@ import os
 from google.adk.agents import Agent
 
 from a2a_agent._model import _DEFAULT_MODEL
+from a2a_agent.mcp_patient_context import criteria_evaluator_mcp_toolsets
 
 _WEEK_2_INSTRUCTION = (
     "Prior-authorization criteria evaluator. Given patient context and "
@@ -40,6 +41,7 @@ _WEEK_1_STUB_INSTRUCTION = (
     "PR."
 )
 
+_criteria_mcp = criteria_evaluator_mcp_toolsets()
 criteria_evaluator_agent = Agent(
     name="criteria_evaluator",
     model=os.environ.get("GEMINI_MODEL", _DEFAULT_MODEL),
@@ -49,6 +51,6 @@ criteria_evaluator_agent = Agent(
         "necessity criteria for the requested service, and surfaces any "
         "met/missing criteria and red-flag bypasses."
     ),
-    instruction=_WEEK_1_STUB_INSTRUCTION,
-    tools=[],
+    instruction=_WEEK_2_INSTRUCTION if _criteria_mcp else _WEEK_1_STUB_INSTRUCTION,
+    tools=_criteria_mcp,
 )

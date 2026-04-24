@@ -12,12 +12,14 @@ All other endpoints require the X-API-Key header (set via AGENT_API_KEY in
 your local .env). Prompt Opinion uses this key when calling us after registration.
 
 For the Week-1 Platform Spike we advertised the FHIR scopes so PO could
-exercise the FHIR-metadata flow end-to-end. The ``patient_context`` sub-agent
-can now call ``fetch_patient_context`` via MCP when ``MCP_SERVER_URL`` is set
-(see ``a2a_agent/mcp_patient_context.py``); other sub-agents remain Week-2.
+exercise the FHIR-metadata flow end-to-end. When ``MCP_SERVER_URL`` is set, the
+``patient_context`` sub-agent calls ``fetch_patient_context`` and
+``criteria_evaluator`` calls ``match_payer_criteria`` (see
+``a2a_agent/mcp_patient_context.py``). ``pa_letter`` is still Week-2 until
+``generate_pa_letter`` is registered on the MCP server and bound here.
 This lets us validate the full round-trip
 (PO chat -> our agent card -> X-API-Key call -> FHIR-metadata extraction ->
-Gemini -> response) as we wire the remaining MCP tools and orchestrator
+Gemini -> response) as we wire the remaining tools and orchestrator
 handoffs.
 """
 

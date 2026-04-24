@@ -42,35 +42,37 @@ def test_sub_agent_names_match_expected_set() -> None:
     )
 
 
-def test_sub_agents_have_no_tools_wired_yet() -> None:
-    """Week-1 guardrail: only ``patient_context`` may attach MCP; others stay empty in CI.
+def test_sub_agents_tool_wiring_invariants() -> None:
+    """MCP :class:`McpToolset` shape per sub-agent; CI runs with no MCP (empty lists).
 
-    In production dev, ``patient_context`` can carry a :class:`McpToolset` for
-    ``fetch_patient_context`` when ``MCP_SERVER_URL`` is set. Pytest forces
-    ``A2A_TESTING_NO_MCP`` so the default is still all-empty here.
-
-    ``criteria_evaluator`` and ``pa_letter`` must not gain tools until their
-    Week-2 MCP tool PRs land.
+    With ``A2A_TESTING_NO_MCP``, ``MCP_SERVER_URL`` is cleared so every
+    sub-agent has ``tools=[]`` except for structural checks on live dev where
+    MCP is enabled: ``patient_context`` and ``criteria_evaluator`` each use
+    exactly one :class:`McpToolset`. ``pa_letter`` stays empty until
+    ``generate_pa_letter`` is bound.
     """
 
     for sub in root_agent.sub_agents:
         assert isinstance(sub, LlmAgent), (
             f"sub-agent {sub.name!r} is not an LlmAgent: {type(sub).__name__}"
         )
-        if sub.name == "patient_context":
+        if sub.name == "pa_letter":
+            assert sub.tools == [], (
+                f"sub-agent {sub.name!r} must stay tool-less until generate_pa_letter; "
+                f"got {sub.tools!r}"
+            )
+            continue
+        if sub.name in ("patient_context", "criteria_evaluator"):
             if not sub.tools:
                 continue
             assert len(sub.tools) == 1, (
-                f"patient_context must use a single McpToolset, got {sub.tools!r}"
+                f"{sub.name} must use a single McpToolset, got {sub.tools!r}"
             )
             assert isinstance(sub.tools[0], McpToolset), (
-                f"expected McpToolset on patient_context, got {type(sub.tools[0])!r}"
+                f"expected McpToolset on {sub.name}, got {type(sub.tools[0])!r}"
             )
             continue
-        assert sub.tools == [], (
-            f"sub-agent {sub.name!r} has unexpected tools wired: {sub.tools!r} "
-            "-- only patient_context is wired in Week-2 / fetch_patient_context first."
-        )
+        assert sub.tools == [], f"sub-agent {sub.name!r} has unexpected tools: {sub.tools!r}"
 
 
 def test_sub_agents_carry_week_1_stub_instruction() -> None:
@@ -85,7 +87,7 @@ def test_sub_agents_carry_week_1_stub_instruction() -> None:
     The Week-2 swap (``instruction=_WEEK_2_INSTRUCTION`` +
     ``tools=[...]``) makes BOTH the tool list non-empty AND the
     instruction sentinel absent in the same diff, so this test and
-    ``test_sub_agents_have_no_tools_wired_yet`` fail together on a
+    ``test_sub_agents_tool_wiring_invariants`` fail together on a
     legitimate Week-2 promotion -- and a reviewer updating the pair of
     tests (or temporarily xfailing them) is the explicit sign-off that
     Week-2 tool binding has landed for that sub-agent.
@@ -109,11 +111,16 @@ def test_sub_agents_carry_week_1_stub_instruction() -> None:
                 "patient_context with MCP must use production instruction, not Week-1 stub"
             )
             assert "Clinical data retrieval specialist" in instruction
+        elif sub.name == "criteria_evaluator" and sub.tools:
+            assert sentinel not in instruction, (
+                "criteria_evaluator with MCP must use production instruction, not Week-1 stub"
+            )
+            assert "Prior-authorization criteria evaluator" in instruction
         else:
             assert sentinel in instruction, (
                 f"sub-agent {sub.name!r} is missing the Week-1 stub sentinel "
                 f"'{sentinel}'. Either the production PLAN.md instruction was "
                 "promoted without also binding an MCP tool (see "
-                "test_sub_agents_have_no_tools_wired_yet), or the stub was "
+                "test_sub_agents_tool_wiring_invariants), or the stub was "
                 "edited without updating this guardrail. See PR #13 review."
             )

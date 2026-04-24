@@ -1,15 +1,18 @@
-"""MCP (FastMCP) toolset for the **patient_context** sub-agent (Week 2).
+"""MCP (FastMCP) streamable HTTP toolsets for A2A sub-agents (Week 2+).
 
-When ``MCP_SERVER_URL`` is set in the environment (e.g. from ``.env``), the
-ADK ``McpToolset`` connects to our ``mcp_server`` streamable HTTP endpoint
-(``.../mcp``) and exposes ``fetch_patient_context`` to Gemini.
+When ``MCP_SERVER_URL`` is set (e.g. from ``.env``), :class:`McpToolset` connects
+to our ``mcp_server`` streamable HTTP endpoint (``.../mcp``) and exposes the
+selected tools to Gemini. ``patient_context`` uses ``fetch_patient_context``;
+``criteria_evaluator`` uses ``match_payer_criteria``.
 
 ``extract_fhir_context`` (``fhir_hook``) writes ``fhir_url`` and ``fhir_token``
 into session state; :func:`_fhir_mcp_headers` injects the SHARP transport headers
-(``x-fhir-server-url``, ``x-fhir-access-token``) so the MCP tool can call the
-Prompt Opinion workspace FHIR server. Header names are duplicated from
-``mcp_server/fhir/constants.py`` so ``a2a_agent`` does not take a hard dependency
-on the MCP package.
+(``x-fhir-server-url``, ``x-fhir-access-token``) for tools that call the PO
+workspace FHIR server (e.g. ``fetch_patient_context``). The same header map is
+sent for other tools too; the MCP server ignores headers it does not need.
+
+Header names are duplicated from ``mcp_server/fhir/constants.py`` so
+``a2a_agent`` does not take a hard dependency on the ``mcp_server`` package.
 """
 
 from __future__ import annotations
@@ -38,12 +41,11 @@ def _fhir_mcp_headers(readonly_context: Any) -> dict[str, str]:
     return h
 
 
-def patient_context_mcp_toolsets() -> list[McpToolset]:
-    """Return a singleton list of :class:`McpToolset` or empty if MCP is disabled."""
+def _streamable_mcp_toolsets(tool_filter: list[str]) -> list[McpToolset]:
+    """One :class:`McpToolset` for ``tool_filter`` names, or empty if MCP is off."""
     url = (os.environ.get("MCP_SERVER_URL") or "").strip()
     if not url:
         return []
-
     return [
         McpToolset(
             connection_params=StreamableHTTPConnectionParams(
@@ -51,7 +53,17 @@ def patient_context_mcp_toolsets() -> list[McpToolset]:
                 timeout=60.0,
                 sse_read_timeout=300.0,
             ),
-            tool_filter=["fetch_patient_context"],
+            tool_filter=tool_filter,
             header_provider=_fhir_mcp_headers,
         )
     ]
+
+
+def patient_context_mcp_toolsets() -> list[McpToolset]:
+    """Return a singleton list of :class:`McpToolset` or empty if MCP is disabled."""
+    return _streamable_mcp_toolsets(["fetch_patient_context"])
+
+
+def criteria_evaluator_mcp_toolsets() -> list[McpToolset]:
+    """Return ``match_payer_criteria`` on the shared MCP server, or empty if off."""
+    return _streamable_mcp_toolsets(["match_payer_criteria"])

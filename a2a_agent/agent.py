@@ -27,10 +27,9 @@ two-line diff — ``instruction=_WEEK_2_INSTRUCTION`` + ``tools=[...]`` —
 plus its MCP tool module, and at the same time relaxes the root's
 "MUST NOT transfer" directive for that sub-agent):
 
-- Person A: ``match_payer_criteria`` rule engine → binds to
-  ``criteria_evaluator_agent.tools`` (and consumes ``PatientContext``
-  produced by ``fetch_patient_context``).
-- Person A: ``generate_pa_letter`` → binds to ``pa_letter_agent.tools``.
+- ``match_payer_criteria`` is bound to ``criteria_evaluator_agent`` via
+  ``criteria_evaluator_mcp_toolsets()`` when ``MCP_SERVER_URL`` is set.
+- Person A: ``generate_pa_letter`` → ``pa_letter_agent.tools`` (remaining MCP tool).
 - Person B: real handoff logic + production system prompts in
   ``a2a_agent/prompts/``.
 """
