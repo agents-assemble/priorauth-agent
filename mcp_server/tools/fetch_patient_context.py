@@ -6,14 +6,16 @@ ready for `match_payer_criteria` to evaluate.
 Two execution paths:
 
 - **Real FHIR path** (a SHARP context is propagated via `x-fhir-server-url` +
-  `x-fhir-access-token`): fans out ~6 parallel FHIR queries against the PO
+  `x-fhir-access-token`): fans out 7 parallel FHIR queries against the PO
   workspace server (`Patient` read + `Condition`, `MedicationRequest`,
-  `Procedure`, `ServiceRequest`, `Coverage`, `DiagnosticReport` searches),
-  then funnels the results through `mcp_server.fhir.extractors` to produce
-  a fully-populated `PatientContext`. Free-text red-flag detection over
-  `DocumentReference.content` is the next PR — until it lands the v1
-  detector reads structured ICD codes only, which catches Patient C's
-  history_of_cancer (Z85.3) but not their cauda-equina note text.
+  `Procedure`, `ServiceRequest`, `Coverage`, `DiagnosticReport`, and
+  `DocumentReference` searches), then funnels the results through
+  `mcp_server.fhir.extractors` (structured codes → models) and
+  `mcp_server.fhir.notes` (DocumentReference → compressed excerpt + free-
+  text red-flag candidates). The combined red-flag set covers ICD-coded
+  conditions (e.g. Patient C's history_of_cancer from Z85.3) AND text
+  findings that have no structured ICD yet (e.g. Patient C's saddle
+  anesthesia / acute urinary retention captured only in the progress note).
 
 - **Demo fallback** (no FHIR context): returns one of the three hard-coded
   demo patients. Local curl development path before PO registration is live;
@@ -39,6 +41,7 @@ from shared.models import (
     Coverage,
     Demographics,
     PatientContext,
+    RedFlagCandidate,
     ServiceRequest,
 )
 
@@ -59,6 +62,11 @@ from mcp_server.fhir.extractors import (
     extract_prior_imaging,
     extract_procedure_trials,
     extract_service_request,
+)
+from mcp_server.fhir.notes import (
+    compress_excerpt,
+    detect_redflags_from_text,
+    extract_document_text,
 )
 
 logger = logging.getLogger(__name__)
@@ -182,12 +190,26 @@ async def _fetch_from_fhir(
                 ),
                 _safe_search(client, "Coverage", {"patient": patient_id}),
                 _safe_search(client, "DiagnosticReport", {"patient": patient_id}),
+                _safe_search(
+                    client,
+                    "DocumentReference",
+                    # Filter to progress notes server-side; some EHRs return
+                    # hundreds of DocumentReferences (lab reports, imaging
+                    # reports, discharge summaries) per patient and the
+                    # bandwidth + extraction cost otherwise dominates. The
+                    # fallback search (no type filter) runs only if zero
+                    # progress notes come back.
+                    {
+                        "patient": patient_id,
+                        "type": "http://loinc.org|11506-3",
+                    },
+                ),
             )
     finally:
         if owns_http:
             await http.aclose()
 
-    patient_res, conditions, meds, procs, srs, coverages, reports = results
+    patient_res, conditions, meds, procs, srs, coverages, reports, docs = results
 
     if not isinstance(patient_res, dict):
         raise FhirContextError(f"Patient/{patient_id} not found on FHIR server")
@@ -197,17 +219,46 @@ async def _fetch_from_fhir(
         *extract_medication_trials(meds),  # type: ignore[arg-type]
         *extract_procedure_trials(procs),  # type: ignore[arg-type]
     ]
+    notes = extract_document_text(docs)  # type: ignore[arg-type]
+    most_recent_note_text = notes[0][1] if notes else ""
+    excerpt = compress_excerpt(most_recent_note_text) if most_recent_note_text else ""
+    redflag_candidates = [
+        *detect_redflags_from_conditions(active_conditions),
+        *detect_redflags_from_text(most_recent_note_text),
+    ]
     return PatientContext(
         demographics=extract_demographics(patient_res),
         active_conditions=active_conditions,
         conservative_therapy_trials=therapy_trials,
         prior_imaging=extract_prior_imaging(reports),  # type: ignore[arg-type]
-        red_flag_candidates=detect_redflags_from_conditions(active_conditions),
+        red_flag_candidates=_dedupe_redflags(redflag_candidates),
         service_request=extract_service_request(srs, cpt_code=service_code),  # type: ignore[arg-type]
         coverage=extract_coverage(coverages),  # type: ignore[arg-type]
-        # `clinical_notes_excerpt` populated in PR-B (DocumentReference path).
-        clinical_notes_excerpt="",
+        clinical_notes_excerpt=excerpt,
     )
+
+
+def _dedupe_redflags(candidates: list[RedFlagCandidate]) -> list[RedFlagCandidate]:
+    """Drop duplicate (label, source) pairs while preserving order.
+
+    The structured ICD pass and the free-text pass can both surface the
+    same canonical_label (e.g. `cancer` from Z85.3 + `cancer` from "history
+    of breast cancer" prose). The rule engine deduplicates by label
+    canonically, but keeping both candidates here would double-cite the
+    evidence in the reasoning trace. We dedupe on `(label, source)` so the
+    LLM still sees one ICD-derived AND one note-derived candidate per label
+    when both are present - that diversity is what makes the trace trust-
+    worthy to a clinician reviewer.
+    """
+    seen: set[tuple[str, str]] = set()
+    out: list[RedFlagCandidate] = []
+    for c in candidates:
+        key = (c.label, c.source)
+        if key in seen:
+            continue
+        seen.add(key)
+        out.append(c)
+    return out
 
 
 async def _safe_read(client: FhirClient, path: str) -> dict[str, Any] | None:
