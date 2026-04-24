@@ -8,6 +8,70 @@ Newest entries at the top. Link to specific PO docs / support threads / Discord 
 
 ---
 
+## 2026-04-23 — Workspace FHIR `updateCreate` is disabled → bundles must POST, not PUT
+
+**Context**: Week-1 import of `demo/patients/patient_a.json` (15-entry transaction bundle) into the PO workspace via the Patients → Import FHIR bundle UI. Every bundle entry shipped in PR #14 used `request.method: "PUT"` with a client-assigned id (`PUT /Patient/demo-patient-a`, `PUT /Condition/demo-patient-a-lbp-radic`, etc.) — the usual idempotent-re-seed shape.
+
+**Observation**: The PO workspace FHIR server rejected the whole transaction atomically with an `OperationOutcome` carrying `Severity: error | Code: not-supported | diagnostics: "The updateCreate operation is not supported. A resource was provided with an id that doesn't exist"`. Not a bundle-parse error — the server recognized the PUT and refused the upsert. Per FHIR R4 §3.1.0.7.1, servers advertise `updateCreate: true` in their `CapabilityStatement.rest.resource.updateCreate` if they support PUT-to-nonexistent-id. PO has it off, which is the conservative-by-default choice for a multi-tenant clinical system — a client-assigned id could collide across tenants or accidentally overwrite a real patient's record on a typo. They're right to keep it off.
+
+**Explanation / workaround**: Rewrote every bundle entry as `{ "method": "POST", "url": "<ResourceType>" }` (PR #15). The server assigns its own UUID logical id on create; intra-bundle references (`Condition.subject.reference = "Patient/demo-patient-a"`, etc.) resolve via `fullUrl` matching and are rewritten server-side during transaction processing, so the demo's resource-graph cross-references still hold without us knowing the final ids. Tradeoff: re-running an import creates duplicates (PO has no id-based upsert without `updateCreate`) — `demo/patients/README.md` documents the "delete via PO Patients UI before re-seed" workaround for demo-video takes. Kept `resource.id` values (`demo-patient-a`, etc.) in the bundle because some strict servers still honor them as hints, and our offline `_DEMO_PATIENTS` fallback in `mcp_server.tools.fetch_patient_context` uses them as the stable lookup key when FHIR is unreachable.
+
+**Impact**: PR #14 → PR #15 (POST conversion + golden-file tests updated to assert POST in `test_bundle_is_well_formed_transaction`). Any future bundle-shipping code must default to POST against strict FHIR servers; check the target's `CapabilityStatement` before assuming PUT works. If we ever add a non-PO FHIR target (HAPI, Firely, Medplum) that advertises `updateCreate: true`, we can switch back to PUT for idempotent re-seeds without touching resources themselves — that's purely a `request.method` change.
+
+**Source**: Observed 2026-04-23 during first live bundle import against `app.promptopinion.ai`. Error text + mitigation pinned in `demo/patients/README.md` §"Importing into a FHIR server". Cross-linked to FHIR R4 `updateCreate` spec ([hl7.org/fhir/R4/capabilitystatement-definitions.html#CapabilityStatement.rest.resource.updateCreate](https://hl7.org/fhir/R4/capabilitystatement-definitions.html#CapabilityStatement.rest.resource.updateCreate)).
+
+---
+
+## 2026-04-23 — PO browser-side FHIR auth uses cookie + `XSRF-TOKEN`, not Bearer JWT
+
+**Context**: While debugging why imported structured resources weren't rendering in the patient-detail UI (separate Documents-vs-Resources rendering issue), I wanted to verify server-side that Anna Demo's 14 non-Patient resources (Conditions, MedicationRequests, Procedures, etc.) actually landed. Tried to hit `GET /api/workspaces/<wsId>/fhir/Condition?patient=<patientId>` directly with the `fhirToken` JWT we receive via our A2A middleware bridge — 401 Unauthorized.
+
+**Observation**: Inspecting PO's own browser network tab during a patient-detail load revealed two distinct auth flavors on the same FHIR endpoint, gated by caller:
+
+1. **Browser → workspace FHIR API**: `.AspNetCore.Identity.Application` session cookie + `XSRF-TOKEN` cookie + matching `x-xsrf-token` header (ASP.NET Core antiforgery pair). No `Authorization` header. `Referer` bound to the workspace route, `User-Agent` bound to the session. Standard ASP.NET Core Identity + antiforgery pattern.
+2. **External A2A/MCP agent → workspace FHIR API**: `Authorization: Bearer <fhirToken>` — the short-lived JWT PO bridges to us in the A2A `message.metadata["https://app.promptopinion.ai/schemas/a2a/v1/fhir-context"]` envelope, with `patient/*.rs`-family scopes baked into the `scope` claim. No cookies involved.
+
+These are **two separate auth schemes on the same routes**, picked by the presence of `Authorization`. Replaying browser-captured cookies from a script never worked — even after adding matching `Referer` / `User-Agent` / `x-xsrf-token` / `sec-*` headers, all calls returned 401. Almost certainly because ASP.NET Identity binds the cookie validator to TLS-session + device-fingerprint data that a `curl`/PowerShell replay can't reproduce; the cookies are effectively non-portable.
+
+**Explanation / workaround**: Don't try to script against the browser-auth path. For verification/debugging of workspace FHIR contents:
+- **Inside PO's UI**: trust the Patients → View Info surface (and its raw-FHIR-viewer, where enabled) — it's the supported surface.
+- **Outside PO's UI**: we have a valid Bearer path via our agent's `fhirToken` bridge. Any FHIR verification script should mint-or-reuse a live agent JWT (easiest: log it out of the fhir_hook at DEBUG and copy from the agent log) and send `Authorization: Bearer <jwt>` — no cookies, no XSRF. That's the path our MCP `fetch_patient_context` uses live, and the same shape should be used for any one-off verification.
+
+**Impact**: Documented the two-scheme split so future debuggers (human or AI) don't waste cycles replaying browser cookies. Nothing to change in our MCP — `FhirClient._get` already uses Bearer exclusively. One-off verification scripts should follow the Bearer pattern, not the cookie pattern. If we ever build a browser extension or interactive debugger that runs inside a logged-in PO tab (as a content script), we'd use the cookie path naturally via same-origin request; that's the only realistic reason to touch scheme (1).
+
+**Source**: Observed 2026-04-23 during post-import verification. Replayed browser headers against `api/workspaces/<wsId>/fhir/Condition` with full cookie + XSRF + User-Agent + Referer match; 401 on every request. Switched to Bearer JWT from the live agent — 200 with the expected resource bundle.
+
+---
+
+## 2026-04-23 — PO's workspace FHIR search requires typed `patient=Patient/<id>`, not bare `<id>`
+
+**Context**: While inspecting PO's browser network activity on a patient-detail page load, I diffed the FHIR search URLs it emits against what our MCP's `FhirClient.search("Condition", params={"patient": patient_id})` sends to the same endpoint.
+
+**Observation**: PO's UI consistently sends **typed** patient references:
+
+```
+GET .../fhir/Condition?patient=Patient/<uuid>
+GET .../fhir/MedicationRequest?patient=Patient/<uuid>
+GET .../fhir/Procedure?patient=Patient/<uuid>
+GET .../fhir/DocumentReference?patient=Patient/<uuid>
+```
+
+Our MCP currently sends **bare** references:
+
+```
+GET .../fhir/Condition?patient=<uuid>
+```
+
+Per FHIR R4 §3.1.1.6 search parameter search token rules, both forms are spec-legal (bare id is a shorthand when the search parameter's resource-type constraint is unambiguous — `patient` is always `Reference(Patient)`). But real server implementations diverge: HAPI FHIR accepts both (we exercise bare in `tests/mcp_server/test_fetch_patient_context_fhir.py` via `MockTransport`), and the PO server **might** enforce the typed form strictly, given every first-party client uses it.
+
+**Explanation / workaround**: No code change yet — I don't have a confirmed live-PO repro of "bare 200s but yields wrong bundle" or "bare 400s". But the risk profile is asymmetric: sending `Patient/<uuid>` always works everywhere; sending `<uuid>` might silently under-select on PO. Tracked as a Week-2 watch item — first live PO smoke against the imported Anna Demo patient will confirm. If the live call returns an empty bundle where the PO UI shows non-empty (on the same patient, same endpoint), switch `FhirClient._build_search_params` or the caller to prefix `Patient/` for `patient` / `subject` / `individual` / `actor` parameters.
+
+**Impact**: Pre-flagged for Week 2 live-FHIR smoke. Non-blocking for Week 1 (demo fixtures in `_DEMO_PATIENTS` are unaffected; the live path is only exercised in CI via `MockTransport`, which is permissive). If PO turns out to be strict here, the fix is a one-line adjustment in `mcp_server/fhir/client.py::search` — wrap bare UUIDs as `f"Patient/{uuid}"` when the parameter name is in a known `Reference(Patient)` allowlist.
+
+**Source**: Observed 2026-04-23 in PO browser network tab during patient-detail page load. Diffed against our MCP emission. No live-PO repro of bare-form failure yet — escalate to this note with the observed response if/when it happens.
+
+---
+
 ## 2026-04-23 — LLM cannot read session state; FHIR hook must inject a redacted prompt note
 
 **Context**: Week-1 Platform Spike round-trip. PO general agent → our external A2A agent. `before_model_callback=extract_fhir_context` ran, extracted `patientId=82e4deff-...`, `fhirUrl=https://app.promptopinion.ai/api/workspaces/...`, and a 1558-char JWT, and wrote all three to `callback_context.state`. Live agent-log proof: `hook_called_fhir_found ... patient_id=82e4... fhir_url_set=True fhir_token=len=1558 sha256=6be5b48af078`.
