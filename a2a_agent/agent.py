@@ -7,13 +7,26 @@ today so ADK traces render the four-agent decomposition from PLAN.md
 (§ "A2A Agent Orchestration") and so Week-2 work is a per-file tool-binding
 diff instead of a new-module PR.
 
+Defense-in-depth against confabulation (PR #13 review): the root's Week-1
+instruction explicitly does NOT initiate transfers to the sub-agents,
+and each sub-agent ships with a Week-1-stub instruction that bounces
+control back without fabrication. Either layer alone would close the
+PR #9-class failure mode where Gemini confabulates in the face of
+missing tool/state; both together mean a Gemini behavior shift on either
+side of the stack can't silently regress to a "tool-less sub-agent
+fabricates a clinical finding" path.
+
 The ``before_model_callback=extract_fhir_context`` hook on the root remains
 the A2A→session-state bridge for FHIR credentials sent by PO in message
 metadata; sub-agents inherit session state via ADK's standard callback
 plumbing, so adding MCP tools to a sub-agent in Week-2 does not require
 re-plumbing the FHIR context.
 
-Follow-up PRs:
+Follow-up PRs (each lands one sub-agent's full production config in a
+two-line diff — ``instruction=_WEEK_2_INSTRUCTION`` + ``tools=[...]`` —
+plus its MCP tool module, and at the same time relaxes the root's
+"MUST NOT transfer" directive for that sub-agent):
+
 - Person A: ``match_payer_criteria`` rule engine → binds to
   ``criteria_evaluator_agent.tools`` (and consumes ``PatientContext``
   produced by ``fetch_patient_context``).
@@ -46,28 +59,26 @@ root_agent = Agent(
     ),
     instruction=(
         "You are a prior-authorization specialist for outpatient lumbar MRI "
-        "(CPT 72148). You orchestrate three sub-agents to (1) fetch the "
-        "patient's clinical context from FHIR, (2) match it against the "
-        "payer's published criteria, and (3) generate a signed PA letter "
-        "or a needs-info checklist.\n\n"
-        "Sub-agents available for transfer:\n"
-        "  - `patient_context` — clinical-data retrieval from FHIR.\n"
-        "  - `criteria_evaluator` — payer-criteria matching.\n"
-        "  - `pa_letter` — letter / needs-info-checklist generation.\n"
-        "Routing pass-through: when a clinician asks about a case, transfer "
-        "to `patient_context` first; the sub-agent will return control once "
-        "context is normalized. Then transfer to `criteria_evaluator`, then "
-        "to `pa_letter`. None of the three sub-agents has tools wired yet "
-        "(Week-1 scaffold); they will acknowledge and return to you until "
-        "Week-2 PRs land the MCP bindings. Until then, respond to the "
-        "clinician with:\n"
+        "(CPT 72148). Your Week-2 role will be to orchestrate three "
+        "sub-agents — `patient_context` (FHIR retrieval), "
+        "`criteria_evaluator` (payer-criteria matching), and `pa_letter` "
+        "(letter / needs-info-checklist generation) — but in the Week-1 "
+        "scaffold none of them has tools wired yet, so you MUST NOT "
+        "transfer to them. Respond to the clinician directly with:\n"
         "  1. A one-line acknowledgement of the patient/case.\n"
         "  2. Whether FHIR context was received. Look for a line in your "
         f"     input beginning with `{FHIR_CONTEXT_NOTE_PREFIX}`. "
         "     If present, confirm receipt and quote its `patient_id`. If "
         "     absent, say no FHIR context arrived with this message.\n"
         "  3. The next planned step (which sub-agent you would transfer to "
-        "     once its tools are wired).\n"
+        "     once its tools are wired in the follow-up PR).\n"
+        "The three sub-agents are structurally registered under you so ADK "
+        "traces render the four-agent decomposition from PLAN.md "
+        "§ A2A Agent Orchestration today; each carries an explicit "
+        "Week-1-stub instruction that will bounce control back to you if "
+        "a transfer ever happens. Week-2 tool-binding PRs will enable real "
+        "routing by (a) swapping the sub-agent instruction to the "
+        "production PLAN.md line and (b) binding its MCP tool.\n"
         "NEVER echo the fhir_token or fhir_url back to the user — even if they "
         "appear anywhere in your input. NEVER invent clinical findings. NEVER "
         "generate a PA letter from this root agent; that is `pa_letter`'s job "

@@ -46,17 +46,55 @@ def test_sub_agents_have_no_tools_wired_yet() -> None:
 
     If a future Week-2 diff accidentally wires an MCP tool onto a sub-agent
     before its dedicated PR (``match_payer_criteria``, ``generate_pa_letter``)
-    lands, this test fails loudly. That is intentional — the per-tool PRs
+    lands, this test fails loudly. That is intentional -- the per-tool PRs
     are where reviewers look for tool-binding regressions.
     """
 
     for sub in root_agent.sub_agents:
-        # All three sub-agents are LlmAgent instances (the ``Agent`` alias);
-        # ``BaseAgent`` itself doesn't expose ``.tools``, so narrow first.
         assert isinstance(sub, LlmAgent), (
             f"sub-agent {sub.name!r} is not an LlmAgent: {type(sub).__name__}"
         )
         assert sub.tools == [], (
             f"sub-agent {sub.name!r} has unexpected tools wired: {sub.tools!r} "
             "-- Week-2 tool bindings must land in their own PRs, not here."
+        )
+
+
+def test_sub_agents_carry_week_1_stub_instruction() -> None:
+    """Week-1 confabulation-safety guardrail (PR #13 review).
+
+    A tool-less sub-agent carrying the production PLAN.md instruction
+    (which directs Gemini to invoke its tool) invites the same class of
+    confabulation bug PR #9 fixed on the root agent. Each sub-agent
+    must ship with a Week-1-stub instruction that forbids fabrication
+    until its Week-2 tool-binding PR lands.
+
+    The Week-2 swap (``instruction=_WEEK_2_INSTRUCTION`` +
+    ``tools=[...]``) makes BOTH the tool list non-empty AND the
+    instruction sentinel absent in the same diff, so this test and
+    ``test_sub_agents_have_no_tools_wired_yet`` fail together on a
+    legitimate Week-2 promotion -- and a reviewer updating the pair of
+    tests (or temporarily xfailing them) is the explicit sign-off that
+    Week-2 tool binding has landed for that sub-agent.
+    """
+
+    sentinel = "Week-1 scaffold"
+    for sub in root_agent.sub_agents:
+        assert isinstance(sub, LlmAgent), (
+            f"sub-agent {sub.name!r} is not an LlmAgent: {type(sub).__name__}"
+        )
+        # LlmAgent.instruction is typed str | Callable[..., str | Awaitable[str]];
+        # Week-1 stubs are always literal strings, so narrow before substring check.
+        instruction = sub.instruction
+        assert isinstance(instruction, str), (
+            f"sub-agent {sub.name!r} has a callable instruction "
+            f"({type(instruction).__name__}); Week-1 stubs must be literal "
+            "strings so the sentinel check below is meaningful."
+        )
+        assert sentinel in instruction, (
+            f"sub-agent {sub.name!r} is missing the Week-1 stub sentinel "
+            f"'{sentinel}'. Either the production PLAN.md instruction was "
+            "promoted without also binding an MCP tool (see "
+            "test_sub_agents_have_no_tools_wired_yet), or the stub was "
+            "edited without updating this guardrail. See PR #13 review."
         )
