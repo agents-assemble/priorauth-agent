@@ -65,5 +65,13 @@ def patient_context_mcp_toolsets() -> list[McpToolset]:
 
 
 def criteria_evaluator_mcp_toolsets() -> list[McpToolset]:
-    """Return ``match_payer_criteria`` on the shared MCP server, or empty if off."""
-    return _streamable_mcp_toolsets(["match_payer_criteria"])
+    """Return fetch + match tools on the shared MCP server, or empty if off.
+
+    ``fetch_patient_context`` is included alongside ``match_payer_criteria`` so
+    the criteria sub-agent can run a self-contained sequence on PO
+    (patient_id is in the FHIR system note) without depending on a fragile
+    inter-sub-agent copy of a large JSON blob. ``patient_context`` is still
+    the dedicated retrieval step in the multi-agent flow when the root
+    orchestrates a longer trace.
+    """
+    return _streamable_mcp_toolsets(["fetch_patient_context", "match_payer_criteria"])

@@ -10,7 +10,7 @@ Week-2 binding (MCP when ``MCP_SERVER_URL`` is set — see
 ``a2a_agent.mcp_patient_context.criteria_evaluator_mcp_toolsets``):
 
     instruction=_WEEK_2_INSTRUCTION
-    tools=criteria_evaluator_mcp_toolsets()
+    tools=criteria_evaluator_mcp_toolsets()  # fetch + match; see module doc
 
 See ``a2a_agent/sub_agents/__init__.py`` for the re-export surface consumed
 by ``a2a_agent.agent.root_agent.sub_agents``.
@@ -26,9 +26,15 @@ from a2a_agent._model import _DEFAULT_MODEL
 from a2a_agent.mcp_patient_context import criteria_evaluator_mcp_toolsets
 
 _WEEK_2_INSTRUCTION = (
-    "Prior-authorization criteria evaluator. Given patient context and "
-    "payer, invoke your tool and return the decision, met criteria, "
-    "missing criteria, and red flags. Never fabricate evidence."
+    "Prior-authorization criteria evaluator. You have two MCP tools: (1) "
+    "`fetch_patient_context` — call it first with `patient_id` from the "
+    'FHIR system note and `service_code` "72148" unless the user said '
+    "otherwise; (2) `match_payer_criteria` — call it with the full JSON text "
+    "returned from tool 1 as `patient_context_json`, `payer_id` from the "
+    "patient's coverage in that JSON (e.g. cigna or aetna), and the same "
+    "CPT as `service_code`. Return the tool 2 result to the user: decision, "
+    "met and missing criteria, and reasoning. Never fabricate evidence; "
+    "if tool output is empty or missing, say so."
 )
 
 _WEEK_1_STUB_INSTRUCTION = (
