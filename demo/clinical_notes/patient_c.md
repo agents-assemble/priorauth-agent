@@ -1,9 +1,9 @@
 ---
-patient_id: demo-patient-c
-encounter_date: 2026-04-15
-encounter_type: urgent-same-day
-provider: Priya Patel, MD — Primary Care
-doctype: progress-note
+patient_id: "demo-patient-c"
+encounter_date: "2026-04-15"
+encounter_type: "urgent-same-day"
+provider: "Priya Patel, MD — Primary Care"
+doctype: "progress-note"
 fhir_document_reference_type: "11506-3"  # Progress note (LOINC)
 urgency: "stat"  # provider-flagged urgent, not routine
 ---
@@ -57,6 +57,7 @@ Any one of these in isolation warrants urgent imaging. **The combination meets t
 ## Plan
 
 1. **STAT MRI lumbar spine without contrast (CPT 72148)** - this prior-authorization request is being submitted as urgent/emergent. Standard "failed conservative therapy" criteria are not applicable to this presentation. If contrast becomes indicated based on initial sequences (to evaluate for mass/infection), expect a follow-on 72149 (with-and-without-contrast) request.
+   - **Note on parallel submission:** the imaging itself will most likely be performed in the ED setting under emergent admission orders (no PA required for emergent inpatient imaging). This outpatient PA is being filed in parallel as a paper-trail record so that, if the ED triages back to outpatient evaluation or if billing posts under outpatient place-of-service, coverage is already authorized. This is not a duplicate request; it is the documented contingency.
 2. Patient is being sent directly from clinic to the Emergency Department at our affiliated hospital for expedited imaging and evaluation by spine surgery. Called ED attending to hand off; they are aware she is en route.
 3. Notified patient's oncologist (Dr. Jordan Kim, Oncology) of the presentation.
 4. Patient and her spouse counseled on the seriousness of this presentation and the potential for permanent neurologic injury if treatment is delayed.

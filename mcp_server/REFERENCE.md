@@ -41,6 +41,16 @@ future syncs don't accidentally treat them as adapted code:
   RxNorm / CPT / ICD-10 into a typed shape. The kind-taxonomy and red-flag
   ICD maps here are the on-the-wire contract with `mcp_server/criteria/`
   (PR #8) — change them together or pin explicit cross-file tests.
+- `mcp_server/fhir/notes.py` — DocumentReference base64 decode +
+  clinical-note excerpt compression + free-text red-flag substring
+  detection with a sentence-scoped negation / educational-marker pass.
+  Upstream has no equivalent (its tools return raw FHIR JSON to the
+  client). The red-flag pattern catalog and negation triggers are pinned
+  to the same canonical_label vocabulary as `extractors.py` and the
+  payer JSON files in `mcp_server/criteria/data/` — when a payer's
+  `red_flags[].canonical_labels` widens, this module's
+  `_REDFLAG_PATTERNS` must widen with it (otherwise the rule engine has
+  a label the extractor will never produce).
 
 ## What we did NOT copy
 

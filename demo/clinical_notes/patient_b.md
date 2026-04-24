@@ -1,9 +1,9 @@
 ---
-patient_id: demo-patient-b
-encounter_date: 2026-04-15
-encounter_type: office-visit
-provider: Marcus Rivera, MD — Family Medicine
-doctype: progress-note
+patient_id: "demo-patient-b"
+encounter_date: "2026-04-15"
+encounter_type: "office-visit"
+provider: "Marcus Rivera, MD — Family Medicine"
+doctype: "progress-note"
 fhir_document_reference_type: "11506-3"  # Progress note (LOINC)
 ---
 

@@ -5,18 +5,25 @@ the same `httpx.AsyncClient` that production code uses, so the test exercises
 the complete code path:
 
   `_fetch_from_fhir` → `FhirClient.read/search` → `httpx.AsyncClient.get`
-                     → MockTransport → JSON dict → extractors → PatientContext
+                     → MockTransport → JSON dict → extractors + notes
+                     → PatientContext
 
-Three demo patients are encoded inline:
+Three demo patients are encoded inline (structured FHIR + a base64-encoded
+DocumentReference per patient pulled from `demo/clinical_notes/*.md`):
 
 - `patient-a`: 47F happy path. 12 wks LBP + 8 PT visits + NSAID + muscle
-  relaxant. Expect APPROVE-shaped PatientContext (full therapy history,
-  zero red-flag candidates).
+  relaxant. Note explicitly denies all red flags. Expect APPROVE-shaped
+  PatientContext: full therapy history, zero red-flag candidates from
+  either ICD codes or note text.
 - `patient-b`: 52M needs-info. NSAID OK, only 1 PT eval visit (incomplete
-  course). Expect needs-info-shaped (NSAID present, PT trial under-counted).
+  course). Note reports no red flags. Expect needs-info-shaped (NSAID
+  present, PT trial under-counted), zero red flags.
 - `patient-c`: 61F red-flag fast-track. Active LBP + Z85.3 breast-ca
-  history. Expect history_of_cancer red-flag candidate from ICD alone.
-  (Cauda-equina note-text candidates ship in PR-B.)
+  history → `history_of_cancer` from ICD. Note presents textbook cauda
+  equina → `cauda_equina_syndrome`, `saddle_anesthesia`,
+  `bowel_bladder_dysfunction`, `acute_urinary_retention` from text.
+  Combined set drives the red-flag fast-track decision the engine will
+  make in Week 2.
 
 Why we don't assert on the rule-engine *decision* here: the rule engine
 ships in Week 2. These tests pin the *PatientContext shape* the engine
@@ -25,7 +32,9 @@ will receive — that's the cross-tool contract we're protecting.
 
 from __future__ import annotations
 
+import base64
 from collections.abc import Callable
+from pathlib import Path
 from typing import Any
 from urllib.parse import parse_qs, urlparse
 
@@ -36,6 +45,9 @@ from mcp_server.tools.fetch_patient_context import _fetch_from_fhir
 
 FHIR_BASE = "https://fhir.example.com/r4"
 TOKEN = "fake-token-for-tests"  # test fixture, not a real secret
+
+REPO_ROOT = Path(__file__).resolve().parents[2]
+DEMO_NOTES_DIR = REPO_ROOT / "demo" / "clinical_notes"
 
 
 # ---------------------------------------------------------------------------
@@ -126,6 +138,34 @@ def _coverage(payer_display: str) -> dict[str, Any]:
     }
 
 
+def _doc_ref(stem: str, *, when: str = "2026-04-15T14:32:00-07:00") -> dict[str, Any]:
+    """Build a DocumentReference whose inline content is the demo `.md` file."""
+    note_text = (DEMO_NOTES_DIR / f"{stem}.md").read_text(encoding="utf-8")
+    return {
+        "resourceType": "DocumentReference",
+        "status": "current",
+        "type": {
+            "coding": [
+                {
+                    "system": "http://loinc.org",
+                    "code": "11506-3",
+                    "display": "Progress note",
+                }
+            ]
+        },
+        "subject": {"reference": f"Patient/{stem.replace('_', '-')}"},
+        "date": when,
+        "content": [
+            {
+                "attachment": {
+                    "contentType": "text/markdown",
+                    "data": base64.b64encode(note_text.encode("utf-8")).decode("ascii"),
+                }
+            }
+        ],
+    }
+
+
 # Per-patient FHIR fixtures keyed by Patient.id. Each entry maps the (path,
 # query-string-collapsed-to-params) to the JSON dict the mock returns.
 _FIXTURES: dict[str, dict[tuple[str, str], dict[str, Any]]] = {
@@ -146,6 +186,10 @@ _FIXTURES: dict[str, dict[tuple[str, str], dict[str, Any]]] = {
         ("ServiceRequest", "code=72148&patient=patient-a"): _bundle(_service_request()),
         ("Coverage", "patient=patient-a"): _bundle(_coverage("Cigna HealthCare")),
         ("DiagnosticReport", "patient=patient-a"): _bundle(),
+        (
+            "DocumentReference",
+            "patient=patient-a&type=http://loinc.org|11506-3",
+        ): _bundle(_doc_ref("patient_a")),
     },
     "patient-b": {
         ("Patient/patient-b", ""): _patient("patient-b", birth="1973-09-04", gender="male"),
@@ -163,6 +207,10 @@ _FIXTURES: dict[str, dict[tuple[str, str], dict[str, Any]]] = {
         ("ServiceRequest", "code=72148&patient=patient-b"): _bundle(_service_request()),
         ("Coverage", "patient=patient-b"): _bundle(_coverage("Cigna HealthCare")),
         ("DiagnosticReport", "patient=patient-b"): _bundle(),
+        (
+            "DocumentReference",
+            "patient=patient-b&type=http://loinc.org|11506-3",
+        ): _bundle(_doc_ref("patient_b")),
     },
     "patient-c": {
         ("Patient/patient-c", ""): _patient("patient-c", birth="1965-03-22", gender="female"),
@@ -180,6 +228,10 @@ _FIXTURES: dict[str, dict[tuple[str, str], dict[str, Any]]] = {
         ("ServiceRequest", "code=72148&patient=patient-c"): _bundle(_service_request()),
         ("Coverage", "patient=patient-c"): _bundle(_coverage("Aetna Better Health")),
         ("DiagnosticReport", "patient=patient-c"): _bundle(),
+        (
+            "DocumentReference",
+            "patient=patient-c&type=http://loinc.org|11506-3",
+        ): _bundle(_doc_ref("patient_c")),
     },
 }
 
@@ -224,9 +276,16 @@ async def test_patient_a_happy_path_full_therapy_history_no_redflags() -> None:
     assert ctx.demographics.sex == "female"
     assert ctx.demographics.age >= 46  # birth 1979 → ~46-47 today
 
-    # Two active conditions extracted, no red flags from ICD codes alone.
+    # Two active conditions extracted; no red flags from EITHER ICD codes
+    # OR note text (Patient A's note explicitly denies them, and the
+    # detector's negation/educational-marker logic suppresses the
+    # "patient educated on red-flag symptoms (saddle numbness, ...)"
+    # phrasing in the Plan section.
     assert {c.code for c in ctx.active_conditions} == {"M54.50", "M54.16"}
-    assert ctx.red_flag_candidates == []
+    assert ctx.red_flag_candidates == [], (
+        "Patient A is the regression bound for the negation logic - "
+        "any new pattern that fires here is a bug."
+    )
 
     # Therapy: 1 NSAID + 1 muscle-relaxant from meds, 1 PT trial collapsed
     # from 8 procedure rows.
@@ -240,6 +299,14 @@ async def test_patient_a_happy_path_full_therapy_history_no_redflags() -> None:
     assert ctx.service_request.cpt_code == "72148"
     assert ctx.service_request.ordering_provider == "Dr. Alice Chen, MD"
     assert ctx.coverage.payer_id == "cigna"
+
+    # Compressed excerpt populated from the DocumentReference. PR #4 review
+    # follow-up #2: NSAID and muscle-relaxant trials must remain
+    # distinguishable in the excerpt, not collapsed into one phrase.
+    excerpt_lower = ctx.clinical_notes_excerpt.lower()
+    assert "naproxen" in excerpt_lower
+    assert "cyclobenzaprine" in excerpt_lower
+    assert len(ctx.clinical_notes_excerpt) <= 3000
 
 
 @pytest.mark.asyncio
@@ -261,7 +328,17 @@ async def test_patient_b_needs_info_pt_undercounted_no_redflags() -> None:
     )
     nsaid_trials = [t for t in ctx.conservative_therapy_trials if t.kind == "NSAID"]
     assert len(nsaid_trials) == 1
-    assert ctx.red_flag_candidates == []
+    assert ctx.red_flag_candidates == [], (
+        "Patient B's note states 'No red flags' explicitly. Detector must "
+        "emit zero from the text, and ICD codes alone (M54.50) carry none."
+    )
+
+    # Excerpt should still document the NSAID trial and the PT no-show
+    # gap - both are needed for the LLM letter-writer to produce a
+    # credible needs-info request that asks for completion of supervised PT.
+    excerpt_lower = ctx.clinical_notes_excerpt.lower()
+    assert "ibuprofen" in excerpt_lower
+    assert "no-show" in excerpt_lower or "physical therapy" in excerpt_lower
 
 
 @pytest.mark.asyncio
@@ -278,10 +355,32 @@ async def test_patient_c_breast_ca_history_surfaces_history_of_cancer_red_flag()
     labels = {c.label for c in ctx.red_flag_candidates}
     assert "history_of_cancer" in labels, (
         "PR #8 cigna.redflag.cancer.canonical_labels lists 'history_of_cancer'; "
-        "the rule engine matches on this exact string."
+        "the rule engine matches on this exact string. Sourced from Z85.3."
     )
-    # Cauda-equina labels (saddle_anesthesia / bowel_bladder_dysfunction /
-    # acute_urinary_retention) come from her clinical-note text — those land
-    # in PR-B alongside the DocumentReference extractor.
-    assert "saddle_anesthesia" not in labels
+    # Cauda-equina canonical labels are now sourced from the
+    # DocumentReference text via `notes.detect_redflags_from_text`. The
+    # combined set is what the rule engine uses to drive a red-flag fast-
+    # track APPROVE in Week 2.
+    cauda_labels = {
+        "saddle_anesthesia",
+        "bowel_bladder_dysfunction",
+        "acute_urinary_retention",
+        "cauda_equina_syndrome",
+    }
+    missing = cauda_labels - labels
+    assert not missing, (
+        f"Patient C should surface every cauda-equina canonical_label from "
+        f"the note text. Missing: {missing}. All labels: {sorted(labels)}"
+    )
+    # Each note-derived candidate must carry source='clinical_note' so the
+    # reasoning trace can distinguish it from ICD-derived candidates.
+    note_sources = {c.source for c in ctx.red_flag_candidates if c.label in cauda_labels}
+    assert note_sources == {"clinical_note"}
+
     assert ctx.coverage.payer_id == "aetna"
+
+    # Excerpt populated and includes the textbook red-flag phrasing the
+    # LLM letter-writer needs to author the urgent-banner section.
+    excerpt_lower = ctx.clinical_notes_excerpt.lower()
+    assert "cauda equina" in excerpt_lower
+    assert "saddle anesthesia" in excerpt_lower
