@@ -64,7 +64,7 @@ _RXNORM_TO_KIND: dict[str, str] = {
     # Muscle relaxants
     "2974": "MUSCLE_RELAXANT",  # cyclobenzaprine
     "6845": "MUSCLE_RELAXANT",  # methocarbamol
-    "10689": "MUSCLE_RELAXANT",  # tizanidine
+    "57258": "MUSCLE_RELAXANT",  # tizanidine
     "1214": "MUSCLE_RELAXANT",  # baclofen
     "2126": "MUSCLE_RELAXANT",  # carisoprodol
     # Gabapentinoids — Cigna doesn't accept this kind today (research §gap),
@@ -80,7 +80,7 @@ _RXNORM_TO_KIND: dict[str, str] = {
     # differently.
     "7804": "ANALGESIC_OPIOID",  # oxycodone
     "5489": "ANALGESIC_OPIOID",  # hydrocodone
-    "10689000": "ANALGESIC_OPIOID",  # tramadol (RxNorm SCDF id)
+    "10689": "ANALGESIC_OPIOID",  # tramadol
     # Non-opioid analgesics
     "161": "ANALGESIC_NON_OPIOID",  # acetaminophen
 }
