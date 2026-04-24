@@ -535,15 +535,17 @@ _WORD_BOUNDARY = re.compile(r"\W")
 def detect_redflags_from_text(note_text: str) -> list[RedFlagCandidate]:
     """Substring-with-negation pass over a clinical note for red flags.
 
-    Returns at most one candidate per canonical_label - the first match
-    wins, subsequent matches just expand the evidence string. Education
-    and counseling sentences are suppressed. Sentences with negation
-    triggers BEFORE the match are suppressed. The structured ICD pass in
-    `mcp_server.fhir.extractors.detect_redflags_from_conditions` is the
-    other half of the red-flag picture; the rule engine deduplicates by
-    label, so emitting both an ICD-derived and note-derived candidate for
-    the same label is fine and actually adds evidence diversity to the
-    reasoning trace.
+    Returns at most one candidate per canonical_label - the first
+    non-suppressed match wins and subsequent matches for the same label
+    are dropped (intentional, to keep the reasoning trace from getting
+    noisy on docs that mention the same finding in multiple sentences).
+    Education and counseling sentences are suppressed. Sentences with
+    negation triggers BEFORE the match are suppressed. The structured
+    ICD pass in `mcp_server.fhir.extractors.detect_redflags_from_conditions`
+    is the other half of the red-flag picture; the rule engine
+    deduplicates by label, so emitting both an ICD-derived and
+    note-derived candidate for the same label is fine and actually adds
+    evidence diversity to the reasoning trace.
     """
     if not note_text:
         return []

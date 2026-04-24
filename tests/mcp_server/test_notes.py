@@ -255,13 +255,12 @@ class TestDetectRedflagsFromText:
         assert labels == set()
 
     def test_negation_with_intact_suppresses_match(self) -> None:
-        text = "Sensation: saddle sensation intact bilaterally."
-        # Wait — "intact" comes AFTER "saddle". Whole-word negation
-        # triggers only fire when BEFORE the match. So this is a positive
-        # finding under our rules. To test the precedence: the educational/
-        # negation-phrase scope IS sentence-wide. To be safe, this should
-        # NOT match because nothing in our pattern matches just "saddle".
-        # Validate as zero matches because the phrase isn't a pattern.
+        # "intact" is a single-token negation trigger; the path under test is
+        # _is_suppressed -> any(token in _NEGATION_TRIGGERS for token in
+        # _tokenize(pre)). The trigger must precede a real pattern in the
+        # same sentence to exercise that path, so use a clinically-plausible
+        # phrasing that puts "intact" before the "saddle numbness" pattern.
+        text = "Intact sensation throughout the saddle numbness distribution."
         labels = {c.label for c in detect_redflags_from_text(text)}
         assert "saddle_anesthesia" not in labels
 
