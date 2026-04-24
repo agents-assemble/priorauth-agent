@@ -120,16 +120,20 @@ The MCP server's JSON-RPC path is **`/mcp`** (mounted by `mcp_server/main.py`). 
 https://<mcp-public-host>/mcp
 ```
 
-For local dev, `<mcp-public-host>` is an ngrok HTTPS hostname that forwards to `127.0.0.1:8000`. **Do not** reuse the A2A agent's public hostname — if both services share one ngrok hostname, every PO call lands on whichever of the two ports that hostname happens to forward to, producing 404s and `ERR_NGROK_334`. See GitHub issue [#17](https://github.com/agents-assemble/priorauth-agent/issues/17) and [`a2a_agent/README.md`](../a2a_agent/README.md#exposing-to-prompt-opinion-two-ngrok-tunnels) for the full two-tunnel layout.
-
-Short version:
+For local dev, `<mcp-public-host>` is a Cloudflare Tunnel hostname (free, no account needed) that forwards to `127.0.0.1:8000`. **Do not** reuse the A2A agent's ngrok hostname — the two services must have distinct public URLs. See GitHub issue [#17](https://github.com/agents-assemble/priorauth-agent/issues/17) and [`a2a_agent/README.md`](../a2a_agent/README.md#exposing-to-prompt-opinion-two-tunnels) for the full layout.
 
 ```bash
-cp ngrok.example.yml ngrok.yml   # one-time; edit authtoken + reserved host
-make ngrok-all                   # both tunnels; see ngrok dashboard at :4040
+# Install (one-time)
+brew install cloudflared            # macOS
+# winget install cloudflare.cloudflared  # Windows
+
+# Every session (in its own terminal)
+make cf-tunnel
+# Prints: https://<random>.trycloudflare.com
+# Register in PO Server Hub as: https://<random>.trycloudflare.com/mcp
 ```
 
-Copy the `mcp` endpoint's public URL + `/mcp` into PO's Server Hub. When the A2A agent consumes `MCP_SERVER_URL` in a later PR it will want the full `https://<mcp-public-host>/mcp` (**not** the A2A base URL) — see [`../.env.example`](../.env.example) for the env contract.
+The A2A agent uses a separate ngrok tunnel (`make ngrok`) — see [`a2a_agent/README.md`](../a2a_agent/README.md#exposing-to-prompt-opinion-two-tunnels). When the A2A agent consumes `MCP_SERVER_URL` in a later PR, it will want the full `https://<cf-host>/mcp` (**not** the A2A base URL) — see [`../.env.example`](../.env.example) for the env contract.
 
 ## Forking note
 

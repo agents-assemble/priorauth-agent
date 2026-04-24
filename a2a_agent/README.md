@@ -58,35 +58,52 @@ make agent-card
 
 Requires `.env` at repo root with at minimum `GOOGLE_API_KEY` and `AGENT_API_KEY` set. See root `.env.example` for the full list.
 
-### Exposing to Prompt Opinion (two ngrok tunnels)
+### Exposing to Prompt Opinion (two tunnels)
 
-When registering in a live PO workspace, the **MCP server** and the **A2A agent** need **separate public HTTPS URLs** — one tunnel per local port. See GitHub issue [#17](https://github.com/agents-assemble/priorauth-agent/issues/17) for the debug history that motivated this layout.
+When registering in a live PO workspace, the **MCP server** and the **A2A agent** need **separate public HTTPS URLs**. ngrok's free tier only supports one online endpoint, so we use **two different tools**:
 
-- **A2A agent** (this service): PO's External Agents UI takes the public base — no path. `AGENT_PUBLIC_URL` in `.env` must match that same base so the agent card's `url` and `supportedInterfaces[].url` fields point at the public host (see [`a2a_agent/app.py`](app.py), which reads `AGENT_PUBLIC_URL` / `BASE_URL` when building the card).
-- **MCP server**: PO's Server Hub takes the public URL **plus** the `/mcp` path — e.g. `https://<mcp-host>/mcp`. See [`../mcp_server/README.md`](../mcp_server/README.md) for the MCP-side setup.
+| Service | Local port | Tunnel tool | Make target | PO registration surface |
+|---|---|---|---|---|
+| **MCP server** | `:8000` | Cloudflare Tunnel (`cloudflared`) | `make cf-tunnel` | Server Hub → `https://<cf-host>/mcp` |
+| **A2A agent** | `:8001` | ngrok | `make ngrok` | External Agents UI → `https://<ngrok-host>/` (base only) |
 
-Running both tunnels from one config file (so they can't race over the same hostname / trigger `ERR_NGROK_334`):
+See GitHub issue [#17](https://github.com/agents-assemble/priorauth-agent/issues/17) for the debug history that motivated this split.
+
+#### One-time setup
 
 ```bash
-# One-time setup
+# ngrok (A2A)
 cp ngrok.example.yml ngrok.yml
-# Edit ngrok.yml: set agent.authtoken (from https://dashboard.ngrok.com) +
-# replace YOUR-RESERVED-HOST.ngrok-free.dev with your reserved domain (or
-# remove the url: line to get a random hostname on both endpoints).
+# Edit ngrok.yml: set agent.authtoken (from https://dashboard.ngrok.com)
 
-# Every session
-make ngrok-all       # or: ngrok start --all --config ngrok.yml
+# cloudflared (MCP) — no config needed, just install
+brew install cloudflared          # macOS
+# winget install cloudflare.cloudflared   # Windows
 ```
 
-The ngrok dashboard (`http://localhost:4040`) will show two forwarding lines — one per service. Copy the `a2a` endpoint's public URL into PO's External Agents UI **and** paste it into `AGENT_PUBLIC_URL` in `.env`, then restart the agent (`make agent`) so the re-generated card reflects the new base.
+#### Every session
 
-If you don't have `make` (e.g. fresh Windows setup), use the PowerShell wrapper:
+```bash
+# Terminal 1 — MCP tunnel (prints a *.trycloudflare.com URL)
+make cf-tunnel
+
+# Terminal 2 — A2A tunnel (prints ngrok forwarding URL)
+make ngrok
+```
+
+Then:
+
+1. Copy the cloudflared URL + `/mcp` into PO's **Server Hub**.
+2. Copy the ngrok forwarding URL into PO's **External Agents UI** and into `AGENT_PUBLIC_URL` in `.env`.
+3. Restart `make agent` so the agent card regenerates with the new public base.
+
+Run `make tunnels` for a quick cheat-sheet of these steps.
+
+On Windows without `make`:
 
 ```powershell
-pwsh -File scripts/ngrok-all.ps1
+pwsh -File scripts/tunnels.ps1
 ```
-
-The single-tunnel `make ngrok` target is kept as a local-smoke convenience for iterating on the A2A app alone (e.g. `make agent-card` through a public URL), but it **must not** be used for PO round-trips — the MCP server won't be reachable and FHIR calls from the agent will fail.
 
 ## Planned follow-up PRs
 
