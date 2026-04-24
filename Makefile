@@ -3,7 +3,7 @@
 SHELL := /bin/sh
 .DEFAULT_GOAL := help
 
-.PHONY: help install dev stop agent mcp ngrok agent-card mcp-initialize mcp-fetch-patient check lint format typecheck test test-fast integration clean
+.PHONY: help install dev stop agent mcp ngrok agent-card mcp-initialize mcp-fetch-patient week2-flash week2-fhir-smoke check lint format typecheck test test-fast integration clean
 
 help: ## Show this help
 	@awk 'BEGIN {FS = ":.*##"; printf "\nUsage:\n  make \033[36m<target>\033[0m\n\nTargets:\n"} /^[a-zA-Z_-]+:.*?##/ { printf "  \033[36m%-15s\033[0m %s\n", $$1, $$2 }' $(MAKEFILE_LIST)
@@ -47,6 +47,12 @@ mcp-fetch-patient: ## Live-curl fetch_patient_context against PO workspace (set 
 		-H 'x-fhir-access-token: $(FHIR_TOKEN)' \
 		-d '{"jsonrpc":"2.0","id":2,"method":"tools/call","params":{"name":"fetch_patient_context","arguments":{"patient_id":"$(PATIENT_ID)","service_code":"72148"}}}'
 	@echo
+
+week2-flash: ## Week 2 Day 1 — Gemini capability check (GOOGLE_API_KEY in .env; see scripts/week2_option_a.py)
+	uv run python scripts/week2_option_a.py flash
+
+week2-fhir-smoke: ## Week 2 Day 1 — MCP fetch_patient_context vs PO FHIR (MCP on :8000; FHIR_* + PATIENT_ID)
+	uv run python scripts/week2_option_a.py fhir
 
 check: lint typecheck test-fast ## Lint + typecheck + fast tests
 
