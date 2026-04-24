@@ -42,7 +42,13 @@ Conventions for the agents live in `[AGENTS.md](AGENTS.md)`. Daily status in `[S
 
 ## Getting started (local dev)
 
-> Prerequisites: Python 3.11+, `[uv](https://docs.astral.sh/uv/)`, `[ngrok](https://ngrok.com/)`, Docker (optional for local stack), a free [Google AI Studio](https://aistudio.google.com/) API key, a [Prompt Opinion](https://app.promptopinion.ai/) account.
+> Prerequisites: Python 3.11+, `[uv](https://docs.astral.sh/uv/)`, `[ngrok](https://ngrok.com/)` or Cloudflare Tunnel, Docker (optional for local stack), a free [Google AI Studio](https://aistudio.google.com/) API key, a [Prompt Opinion](https://app.promptopinion.ai/) account.
+
+**Run MCP (8000) + A2A (8001) on one computer and register both in Prompt
+Opinion** (full handoff for a teammate, e.g. Person A on a single machine): see
+[docs/LOCAL_DEV_ONE_MACHINE.md](docs/LOCAL_DEV_ONE_MACHINE.md) — two public
+urls, `MCP_SERVER_URL` + `AGENT_PUBLIC_URL`, PO Server Hub + External Agents
+UI.
 
 ```bash
 # Clone + install
@@ -52,7 +58,7 @@ uv sync
 
 # Configure env
 cp .env.example .env
-# Fill in GOOGLE_API_KEY and other values
+# Fill in GOOGLE_API_KEY and other values (see doc above for full list)
 
 # Run everything locally (MCP + A2A + optional ngrok)
 make dev
