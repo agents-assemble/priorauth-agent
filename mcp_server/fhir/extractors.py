@@ -57,20 +57,20 @@ _RXNORM_TO_KIND: dict[str, str] = {
     # NSAIDs
     "5640": "NSAID",  # ibuprofen
     "7258": "NSAID",  # naproxen
-    "39993": "NSAID",  # meloxicam
+    "41493": "NSAID",  # meloxicam
     "140587": "NSAID",  # celecoxib
     "3355": "NSAID",  # diclofenac
     "35827": "NSAID",  # ketorolac
     # Muscle relaxants
-    "2974": "MUSCLE_RELAXANT",  # cyclobenzaprine
+    "21949": "MUSCLE_RELAXANT",  # cyclobenzaprine
     "6845": "MUSCLE_RELAXANT",  # methocarbamol
     "57258": "MUSCLE_RELAXANT",  # tizanidine
-    "1214": "MUSCLE_RELAXANT",  # baclofen
-    "2126": "MUSCLE_RELAXANT",  # carisoprodol
+    "1292": "MUSCLE_RELAXANT",  # baclofen
+    "2101": "MUSCLE_RELAXANT",  # carisoprodol
     # Gabapentinoids — Cigna doesn't accept this kind today (research §gap),
     # but the extractor still emits it; the rule engine decides what to count.
     "25480": "GABAPENTINOID",  # gabapentin
-    "398217": "GABAPENTINOID",  # pregabalin
+    "187832": "GABAPENTINOID",  # pregabalin
     # Oral corticosteroids
     "8640": "ORAL_CORTICOSTEROID",  # prednisone
     "6902": "ORAL_CORTICOSTEROID",  # methylprednisolone

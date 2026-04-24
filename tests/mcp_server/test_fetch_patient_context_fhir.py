@@ -137,7 +137,7 @@ _FIXTURES: dict[str, dict[tuple[str, str], dict[str, Any]]] = {
         ),
         ("MedicationRequest", "patient=patient-a"): _bundle(
             _med("5640", "ibuprofen 600 mg", "2026-02-01"),
-            _med("2974", "cyclobenzaprine 10 mg", "2026-02-01"),
+            _med("21949", "cyclobenzaprine 10 mg", "2026-02-01"),
         ),
         ("Procedure", "patient=patient-a"): _bundle(
             *(_proc("97110", performed=f"2026-02-{day:02d}") for day in (1, 8, 15, 22)),

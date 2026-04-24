@@ -155,7 +155,7 @@ def _med_request(
     [
         ("5640", "NSAID"),
         ("7258", "NSAID"),
-        ("2974", "MUSCLE_RELAXANT"),
+        ("21949", "MUSCLE_RELAXANT"),
         ("25480", "GABAPENTINOID"),
         ("8640", "ORAL_CORTICOSTEROID"),
         ("7804", "ANALGESIC_OPIOID"),
