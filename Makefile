@@ -3,7 +3,7 @@
 SHELL := /bin/sh
 .DEFAULT_GOAL := help
 
-.PHONY: help install dev stop agent mcp ngrok agent-card mcp-initialize check lint format typecheck test test-fast integration clean
+.PHONY: help install dev stop agent mcp ngrok agent-card mcp-initialize mcp-fetch-patient check lint format typecheck test test-fast integration clean
 
 help: ## Show this help
 	@awk 'BEGIN {FS = ":.*##"; printf "\nUsage:\n  make \033[36m<target>\033[0m\n\nTargets:\n"} /^[a-zA-Z_-]+:.*?##/ { printf "  \033[36m%-15s\033[0m %s\n", $$1, $$2 }' $(MAKEFILE_LIST)
@@ -34,6 +34,18 @@ mcp-initialize: ## Send the MCP initialize handshake to localhost:8000 (server m
 		-H 'Accept: application/json, text/event-stream' \
 		-H 'Content-Type: application/json' \
 		-d '{"jsonrpc":"2.0","id":1,"method":"initialize","params":{"protocolVersion":"2025-06-18","capabilities":{},"clientInfo":{"name":"curl","version":"1.0"}}}'
+	@echo
+
+mcp-fetch-patient: ## Live-curl fetch_patient_context against PO workspace (set FHIR_URL, FHIR_TOKEN, PATIENT_ID)
+	@test -n "$(FHIR_URL)" || (echo "FHIR_URL is required" && exit 1)
+	@test -n "$(FHIR_TOKEN)" || (echo "FHIR_TOKEN is required" && exit 1)
+	@test -n "$(PATIENT_ID)" || (echo "PATIENT_ID is required" && exit 1)
+	curl -s -X POST http://localhost:8000/mcp \
+		-H 'Accept: application/json, text/event-stream' \
+		-H 'Content-Type: application/json' \
+		-H 'x-fhir-server-url: $(FHIR_URL)' \
+		-H 'x-fhir-access-token: $(FHIR_TOKEN)' \
+		-d '{"jsonrpc":"2.0","id":2,"method":"tools/call","params":{"name":"fetch_patient_context","arguments":{"patient_id":"$(PATIENT_ID)","service_code":"72148"}}}'
 	@echo
 
 check: lint typecheck test-fast ## Lint + typecheck + fast tests

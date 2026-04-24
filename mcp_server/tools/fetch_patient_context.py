@@ -3,20 +3,22 @@
 Given a `patient_id` + `service_code`, return a normalized `PatientContext`
 ready for `match_payer_criteria` to evaluate.
 
-This file is intentionally Week-1-scaffold tier:
+Two execution paths:
 
-- When PO propagates a SHARP FHIR context (via x-fhir-server-url +
-  x-fhir-access-token headers), it performs a real `Patient/{id}` read and
-  wraps the demographics into a `PatientContext`. The clinical-list fields
-  (conditions, therapies, imaging, red flags) are empty placeholders for now
-  - the real extraction lands in Week-2 PRs alongside the corresponding
-  golden-file tests. The scaffold exists so PO registration + the round-trip
-  can be verified without waiting on Week-2 extraction code.
+- **Real FHIR path** (a SHARP context is propagated via `x-fhir-server-url` +
+  `x-fhir-access-token`): fans out ~6 parallel FHIR queries against the PO
+  workspace server (`Patient` read + `Condition`, `MedicationRequest`,
+  `Procedure`, `ServiceRequest`, `Coverage`, `DiagnosticReport` searches),
+  then funnels the results through `mcp_server.fhir.extractors` to produce
+  a fully-populated `PatientContext`. Free-text red-flag detection over
+  `DocumentReference.content` is the next PR — until it lands the v1
+  detector reads structured ICD codes only, which catches Patient C's
+  history_of_cancer (Z85.3) but not their cauda-equina note text.
 
-- Without a FHIR context (local dev + curl before PO registration is live),
-  it falls back to three hard-coded demo patients (A/B/C) from the plan's
-  "Demo Data Strategy" section. Any unknown patient_id raises
-  FhirContextError so the error path is exercised too.
+- **Demo fallback** (no FHIR context): returns one of the three hard-coded
+  demo patients. Local curl development path before PO registration is live;
+  also the path the smoke tests in `tests/mcp_server/test_fetch_patient
+  _context.py` exercise.
 
 Signature note: flat `Annotated[str, Field(...)]` args per the tool
 contract in `.cursor/rules/mcp-server.md` - FastMCP generates the tool's
@@ -27,9 +29,9 @@ ergonomics on both Claude Desktop and the PO workspace UI.
 
 from __future__ import annotations
 
+import asyncio
 import logging
-from datetime import date
-from typing import Annotated
+from typing import Annotated, Any
 
 import httpx
 from pydantic import Field
@@ -42,10 +44,21 @@ from shared.models import (
 
 from mcp_server.fhir.client import FhirClient
 from mcp_server.fhir.context import (
+    FhirContext,
     FhirContextError,
     McpContext,
     get_fhir_context,
     get_patient_id_if_context_exists,
+)
+from mcp_server.fhir.extractors import (
+    detect_redflags_from_conditions,
+    extract_conditions,
+    extract_coverage,
+    extract_demographics,
+    extract_medication_trials,
+    extract_prior_imaging,
+    extract_procedure_trials,
+    extract_service_request,
 )
 
 logger = logging.getLogger(__name__)
@@ -77,13 +90,6 @@ _DEMO_PATIENTS: dict[str, PatientContext] = {
         ),
     ),
 }
-
-
-def _calculate_age(birth_date_iso: str) -> int:
-    """Year-math age from an ISO-8601 birthDate. Off-by-one safe."""
-    birth = date.fromisoformat(birth_date_iso)
-    today = date.today()
-    return today.year - birth.year - ((today.month, today.day) < (birth.month, birth.day))
 
 
 async def fetch_patient_context(
@@ -125,7 +131,6 @@ async def fetch_patient_context(
     )
 
     if fhir_ctx is None:
-        # Demo fallback — local dev path before PO registration.
         if effective_patient_id in _DEMO_PATIENTS:
             return _DEMO_PATIENTS[effective_patient_id]
         raise FhirContextError(
@@ -134,33 +139,104 @@ async def fetch_patient_context(
             "enabled, or call with patient_id='demo-patient-a' for local smoke testing."
         )
 
-    # Real FHIR path — Week-1 skeleton. Only pulls demographics; Week-2 PRs
-    # extend this to Condition / MedicationRequest / Procedure / etc.
-    async with FhirClient(base_url=fhir_ctx.url, token=fhir_ctx.token) as client:
-        try:
-            patient = await client.read(f"Patient/{effective_patient_id}")
-        except httpx.HTTPStatusError as exc:
-            raise FhirContextError(
-                f"FHIR server returned HTTP {exc.response.status_code} reading Patient/"
-                f"{effective_patient_id}: {exc.response.text[:200]}"
-            ) from exc
-
-    if patient is None:
-        raise FhirContextError(f"Patient/{effective_patient_id} not found on FHIR server")
-
-    birth = patient.get("birthDate")
-    age = _calculate_age(birth) if birth else 0
-    sex = patient.get("gender", "unknown")
-
-    return PatientContext(
-        demographics=Demographics(patient_id=effective_patient_id, age=age, sex=sex),
-        # Clinical-list fields left empty — Week 2 tool work fills these.
-        service_request=ServiceRequest(
-            cpt_code=service_code,
-            description=_DEMO_SERVICE_DESCRIPTION if service_code == _DEMO_SERVICE_CPT else "",
-            ordered_date="",
-            ordering_provider="",
-            reason_codes=[],
-        ),
-        coverage=Coverage(payer_id="", payer_name=""),
+    return await _fetch_from_fhir(
+        fhir_ctx=fhir_ctx,
+        patient_id=effective_patient_id,
+        service_code=service_code,
     )
+
+
+async def _fetch_from_fhir(
+    *,
+    fhir_ctx: FhirContext,
+    patient_id: str,
+    service_code: str,
+    http: httpx.AsyncClient | None = None,
+) -> PatientContext:
+    """Fan out FHIR queries in parallel and assemble a PatientContext.
+
+    Uses one shared `httpx.AsyncClient` (via `FhirClient`'s injectable-pool
+    path) so the 6 parallel calls reuse a single connection pool — PO's FHIR
+    server keeps connections alive long enough for this to dominate latency
+    over per-call client instantiation.
+
+    `http` is a test seam: production passes None and we open/close an
+    ephemeral client; tests inject an `httpx.AsyncClient` wired to a
+    `MockTransport` so the fan-out can be exercised end-to-end without a
+    real FHIR server.
+    """
+    owns_http = http is None
+    if owns_http:
+        http = httpx.AsyncClient(timeout=15.0)
+    assert http is not None
+    try:
+        client = FhirClient(base_url=fhir_ctx.url, token=fhir_ctx.token, http=http)
+        async with client:
+            results = await asyncio.gather(
+                _safe_read(client, f"Patient/{patient_id}"),
+                _safe_search(client, "Condition", {"patient": patient_id}),
+                _safe_search(client, "MedicationRequest", {"patient": patient_id}),
+                _safe_search(client, "Procedure", {"patient": patient_id}),
+                _safe_search(
+                    client, "ServiceRequest", {"patient": patient_id, "code": service_code}
+                ),
+                _safe_search(client, "Coverage", {"patient": patient_id}),
+                _safe_search(client, "DiagnosticReport", {"patient": patient_id}),
+            )
+    finally:
+        if owns_http:
+            await http.aclose()
+
+    patient_res, conditions, meds, procs, srs, coverages, reports = results
+
+    if not isinstance(patient_res, dict):
+        raise FhirContextError(f"Patient/{patient_id} not found on FHIR server")
+
+    active_conditions = extract_conditions(conditions)  # type: ignore[arg-type]
+    therapy_trials = [
+        *extract_medication_trials(meds),  # type: ignore[arg-type]
+        *extract_procedure_trials(procs),  # type: ignore[arg-type]
+    ]
+    return PatientContext(
+        demographics=extract_demographics(patient_res),
+        active_conditions=active_conditions,
+        conservative_therapy_trials=therapy_trials,
+        prior_imaging=extract_prior_imaging(reports),  # type: ignore[arg-type]
+        red_flag_candidates=detect_redflags_from_conditions(active_conditions),
+        service_request=extract_service_request(srs, cpt_code=service_code),  # type: ignore[arg-type]
+        coverage=extract_coverage(coverages),  # type: ignore[arg-type]
+        # `clinical_notes_excerpt` populated in PR-B (DocumentReference path).
+        clinical_notes_excerpt="",
+    )
+
+
+async def _safe_read(client: FhirClient, path: str) -> dict[str, Any] | None:
+    """Wrap `client.read()` to convert FHIR HTTP errors into a structured tool error."""
+    try:
+        return await client.read(path)
+    except httpx.HTTPStatusError as exc:
+        raise FhirContextError(
+            f"FHIR server returned HTTP {exc.response.status_code} reading {path}: "
+            f"{exc.response.text[:200]}"
+        ) from exc
+
+
+async def _safe_search(
+    client: FhirClient,
+    resource_type: str,
+    params: dict[str, str],
+) -> list[dict[str, Any]]:
+    """Wrap `client.search()` to convert HTTP errors. Empty list on 404."""
+    try:
+        return await client.search(resource_type, params)
+    except httpx.HTTPStatusError as exc:
+        # 4xx on a search is nearly always "no such patient" or "no permission";
+        # we degrade to an empty list so the tool can still produce a partial
+        # context the rule engine can route to needs_info instead of crashing.
+        logger.warning(
+            "fhir_search_error resource=%s status=%d body=%s",
+            resource_type,
+            exc.response.status_code,
+            exc.response.text[:200],
+        )
+        return []
