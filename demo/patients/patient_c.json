@@ -241,7 +241,7 @@
         "id": "demo-patient-c-cov",
         "status": "active",
         "beneficiary": { "reference": "Patient/demo-patient-c" },
-        "payor": [{ "display": "Aetna Better Health" }],
+        "payor": [{ "display": "Aetna" }],
         "subscriberId": "DEMO-C-99903",
         "class": [
           {

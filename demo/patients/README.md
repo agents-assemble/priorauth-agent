@@ -10,7 +10,7 @@ The bundles carry **structured FHIR only** (Patient, Condition, MedicationReques
 |---|---|---|---|---|
 | `patient_a.json` | `demo-patient-a` | 47F | Cigna HealthCare | Happy path — 12 wks LBP, 8 PT sessions, NSAID + muscle-relaxant, no red-flag ICDs |
 | `patient_b.json` | `demo-patient-b` | 52M | Cigna HealthCare | Needs-info — NSAID only, 1 PT intake + 3 no-shows, no red flags |
-| `patient_c.json` | `demo-patient-c` | 61F | Aetna Better Health | Red-flag fast-track — hx breast cancer (Z85.3), urinary retention + incontinence (R32 / R33.9), saddle anesthesia only in note text |
+| `patient_c.json` | `demo-patient-c` | 61F | Aetna (HMO) | Red-flag fast-track — hx breast cancer (Z85.3), urinary retention + incontinence (R32 / R33.9), saddle anesthesia only in note text |
 
 ## Shape of each bundle
 
