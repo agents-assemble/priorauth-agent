@@ -52,7 +52,7 @@ from a2a_agent.sub_agents import (
     patient_context_agent,
 )
 
-_logger = logging.getLogger(__name__)
+logger = logging.getLogger(__name__)
 
 # Week-1: no MCP — root must not delegate to sub-agents (they are stubs).
 # With MCP: patient_context + criteria_evaluator are live; pa_letter waits.
@@ -88,51 +88,30 @@ _ROOT_WEEK1_OR_MCP_OFF = (
 
 _ROOT_MCP_ON = (
     "You are a prior-authorization orchestrator for outpatient lumbar MRI "
-    "(CPT 72148). You do NOT answer clinical questions yourself. Your ONLY "
-    "job is to delegate to sub-agents by calling `transfer_to_agent`.\n\n"
-    "When a prior-authorization request arrives with FHIR context (look for "
-    f"a line beginning with `{FHIR_CONTEXT_NOTE_PREFIX}`), you MUST "
-    "IMMEDIATELY call `transfer_to_agent` with agent_name "
-    "`criteria_evaluator`. Do NOT generate any text before the transfer — "
-    "just call the function. The `criteria_evaluator` sub-agent will fetch "
-    "patient data and evaluate payer criteria on its own.\n\n"
+    "(CPT 72148). You do NOT answer clinical questions yourself. Your only "
+    "job is to delegate to sub-agents via `transfer_to_agent`.\n\n"
+    "When FHIR context is present, immediately transfer to `criteria_evaluator`. "
+    "Do not narrate the plan first. Do not transfer to `pa_letter` because its "
+    "tool is not wired yet.\n\n"
     "Rules:\n"
-    "- NEVER answer the clinical question yourself.\n"
-    "- NEVER narrate what you plan to do — just transfer.\n"
-    "- NEVER transfer to `pa_letter` (its tool is not wired yet).\n"
+    "- NEVER answer clinically from the root agent.\n"
     "- NEVER echo fhir_token, fhir_url, or raw JWT text.\n"
     "- NEVER invent clinical findings, criteria decisions, or PA letters.\n"
     "- If no FHIR context is present, say so in one sentence and stop."
 )
 
 _root_instruction = _ROOT_MCP_ON if _mcp_patient and _mcp_criteria else _ROOT_WEEK1_OR_MCP_OFF
-
 _MCP_ACTIVE = _mcp_patient and _mcp_criteria
 
 
 def _deterministic_transfer(callback_context: Any, llm_request: Any) -> LlmResponse | None:
-    """Skip the root LLM call entirely when MCP tools are active.
-
-    When FHIR context is present, the root agent's only job is to call
-    ``transfer_to_agent(criteria_evaluator)``. That is a fixed routing
-    decision — burning a Gemini call for it wastes 1 of the 5-RPM
-    free-tier budget. This callback short-circuits the LLM by returning
-    a synthetic ``function_call`` response, saving ~20% of the per-
-    request quota.
-
-    Falls through to the LLM (returns None) when no FHIR context is
-    found so the root can respond with a human-readable error.
-    """
+    """Skip the root LLM turn when routing is fixed by MCP availability."""
     extract_fhir_context(callback_context, llm_request)  # type: ignore[no-untyped-call]
-
-    state = callback_context.state
-    patient_id = (state.get("patient_id") or "").strip()
-
+    patient_id = str(callback_context.state.get("patient_id") or "").strip()
     if not patient_id:
         return None
 
-    _logger.info("DETERMINISTIC_TRANSFER patient_id=%s → criteria_evaluator", patient_id)
-
+    logger.info("deterministic_root_transfer patient_id=%s", patient_id)
     return LlmResponse(
         content=types.Content(
             role="model",
@@ -147,7 +126,6 @@ def _deterministic_transfer(callback_context: Any, llm_request: Any) -> LlmRespo
         ),
         turn_complete=True,
     )
-
 
 root_agent = Agent(
     name="priorauth_agent",

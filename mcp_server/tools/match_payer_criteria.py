@@ -48,48 +48,7 @@ logger = logging.getLogger(__name__)
 
 _RADICULOPATHY_PREFIXES = ("M54.1",)
 _SPONDYLOLISTHESIS_DDD_PREFIXES = ("M43.1", "M51", "M47.8")
-
 _REGISTERED_PAYERS: frozenset[str] = frozenset(registered_payer_ids())
-
-
-def _unknown_payer_criteria_result(
-    context: PatientContext,
-    service_code: str,
-    normalized_payer_id: str,
-) -> CriteriaResult:
-    """When Coverage did not map to cigna/aetna (or tool args are invalid).
-
-    Aligns with :func:`mcp_server.fhir.extractors.extract_coverage` docstring:
-    unmapped payers are not guessed — we return ``needs_info`` with evidence.
-    """
-    display = (context.coverage.payer_name or "").strip() or "[no payor display in FHIR]"
-    missing = CriterionCheck(
-        id="system.payer_not_mapped",
-        description=(
-            "Insurance must map to an encoded payer with lumbar-MRI criteria "
-            f"({', '.join(sorted(_REGISTERED_PAYERS))} only in this release)"
-        ),
-        met=False,
-        evidence=(
-            f"FHIR Coverage payor display/name: {display!r}. "
-            f"Routed payer_id={normalized_payer_id!r}. "
-            "Add payer display text that contains 'cigna' / 'aetna' (or eviCore), "
-            "or use a patient whose plan matches a supported carrier."
-        ),
-    )
-    return CriteriaResult(
-        decision=Decision.NEEDS_INFO,
-        payer_id=normalized_payer_id,
-        service_cpt=service_code,
-        criteria_missing=[missing],
-        confidence=1.0,
-        reasoning_trace=(
-            "Cannot load payer medical-necessity criteria: the patient's Coverage "
-            f"did not resolve to a supported payer_id. Observed payor: {display!r}. "
-            f"Supported ids: {', '.join(sorted(_REGISTERED_PAYERS))}."
-        ),
-        source_policy_url=None,
-    )
 
 
 # ---------------------------------------------------------------------------
@@ -252,83 +211,38 @@ def _build_preliminary_findings(
     return "\n".join(lines)
 
 
-def _try_deterministic_approval(
+def _unknown_payer_criteria_result(
     context: PatientContext,
-    criteria: PayerCriteria,
-    pathway: TherapyPathway | None,
-    payer_id: str,
     service_code: str,
-) -> CriteriaResult | None:
-    """Approve without Gemini when structured data unambiguously meets all criteria.
-
-    Returns a CriteriaResult if ALL of the following hold:
-      1. A matching pathway exists (we know the duration threshold).
-      2. The patient has enough distinct accepted therapy kinds.
-      3. The estimated therapy duration meets or exceeds the pathway threshold.
-
-    Returns None to fall through to the Gemini reasoning pass when any
-    criterion is uncertain — e.g. missing structured therapy data but
-    clinical notes might contain evidence.
-    """
-    if pathway is None:
-        return None
-
-    accepted = set(criteria.conservative_therapy.accepted_kinds)
-    patient_kinds = {t.kind for t in context.conservative_therapy_trials if t.kind in accepted}
-
-    if len(patient_kinds) < criteria.conservative_therapy.min_kinds_count:
-        return None
-
-    duration = _estimate_therapy_duration_weeks(context)
-    if duration < pathway.weeks:
-        return None
-
-    checks = [
-        CriterionCheck(
-            id=f"{payer_id}.service_covered",
-            description=f"CPT {service_code} covered by {criteria.policy_title}",
-            met=True,
-            evidence=f"CPT {service_code} in {criteria.service.cpt_codes}",
-        ),
-        CriterionCheck(
-            id=f"{payer_id}.no_red_flags",
-            description="No red-flag conditions requiring fast-track",
-            met=True,
-            evidence="0 red-flag candidates in patient data",
-        ),
-        CriterionCheck(
-            id=f"{payer_id}.conservative_therapy_kinds",
-            description=(
-                f"At least {criteria.conservative_therapy.min_kinds_count} distinct "
-                f"accepted therapy kind(s) documented"
-            ),
-            met=True,
-            evidence=f"Found {sorted(patient_kinds)}",
-        ),
-        CriterionCheck(
-            id=f"{payer_id}.conservative_therapy_duration",
-            description=f"Conservative therapy >= {pathway.weeks} weeks",
-            met=True,
-            evidence=f"Estimated {duration:.1f} weeks (threshold {pathway.weeks})",
-        ),
-    ]
-
+    payer_id: str,
+) -> CriteriaResult:
+    """Return a safe needs-info result for unmapped or unsupported payers."""
+    observed_payor = context.coverage.payer_name.strip() or "[no payor display in FHIR]"
+    supported = ", ".join(sorted(_REGISTERED_PAYERS))
     return CriteriaResult(
-        decision=Decision.APPROVE,
+        decision=Decision.NEEDS_INFO,
         payer_id=payer_id,
         service_cpt=service_code,
-        criteria_met=checks,
-        red_flag_fast_track=False,
-        red_flag_reason=None,
+        criteria_missing=[
+            CriterionCheck(
+                id="system.payer_not_mapped",
+                description=(
+                    "Coverage must map to a supported payer before criteria can be evaluated"
+                ),
+                met=False,
+                evidence=(
+                    f"Observed Coverage payor: {observed_payor!r}. "
+                    f"Resolved payer_id={payer_id!r}. Supported payer_ids: {supported}."
+                ),
+            )
+        ],
         confidence=1.0,
         reasoning_trace=(
-            f"Deterministic approval: CPT {service_code} is covered. "
-            f"Patient has {len(patient_kinds)} accepted therapy kind(s) "
-            f"({', '.join(sorted(patient_kinds))}) with estimated "
-            f"{duration:.1f} weeks of treatment, meeting the "
-            f"{pathway.weeks}-week threshold for pathway {pathway.id}."
+            "Cannot evaluate payer medical-necessity criteria because the patient's "
+            f"Coverage did not resolve to a supported payer. Observed payor: "
+            f"{observed_payor!r}. Supported payer_ids: {supported}."
         ),
-        source_policy_url=criteria.source_policy_url,
+        source_policy_url=None,
     )
 
 
@@ -426,7 +340,7 @@ async def match_payer_criteria(
 
     if not payer_id or payer_id not in _REGISTERED_PAYERS:
         logger.info(
-            "match_payer_criteria UNKNOWN_PAYER patient=%s payer_id=%r",
+            "match_payer_criteria unknown_payer patient=%s payer_id=%r",
             context.demographics.patient_id,
             payer_id,
         )
@@ -482,12 +396,6 @@ async def match_payer_criteria(
         )
 
     pathway = _select_pathway(context, criteria)
-
-    deterministic = _try_deterministic_approval(context, criteria, pathway, payer_id, service_code)
-    if deterministic is not None:
-        logger.info("match_payer_criteria DETERMINISTIC_APPROVE payer=%s", payer_id)
-        return deterministic
-
     preliminary = _build_preliminary_findings(context, criteria, pathway)
 
     logger.info("match_payer_criteria calling Gemini for reasoning pass")

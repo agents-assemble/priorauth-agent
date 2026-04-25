@@ -292,17 +292,12 @@ def test_coverage_routes_payer_name_to_canonical_id(payor_display: str, expected
 
 
 def test_coverage_payor_reference_without_display_still_routes() -> None:
-    """When display is empty, fall back to Reference so '…/Cigna-Plan' matches."""
     cov = extract_coverage(
         [
             {
                 "resourceType": "Coverage",
                 "status": "active",
-                "payor": [
-                    {
-                        "reference": "Organization/001-cigna-demo-plan",
-                    }
-                ],
+                "payor": [{"reference": "Organization/001-cigna-demo-plan"}],
             }
         ]
     )

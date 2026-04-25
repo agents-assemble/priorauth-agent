@@ -83,11 +83,9 @@ mcp.tool(
 mcp.tool(
     name="evaluate_prior_auth",
     description=(
-        "All-in-one prior-authorization evaluation. Fetches the patient's "
-        "clinical context from the FHIR server and evaluates it against "
-        "the payer's medical-necessity criteria in a single call. Returns "
-        "a CriteriaResult with decision, met/missing criteria, evidence, "
-        "and a reasoning trace."
+        "Fetch the patient's clinical context and evaluate it against the payer's "
+        "medical-necessity criteria in one call. Returns a CriteriaResult with "
+        "decision, evidence, met/missing criteria, and reasoning trace."
     ),
 )(evaluate_prior_auth)
 
