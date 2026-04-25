@@ -88,10 +88,7 @@ async def _gemini_generate_letter(
 
     note_block = ""
     if clinician_note and clinician_note.strip():
-        note_block = (
-            "\n## Clinician note (non-authoritative)\n\n"
-            f"{clinician_note.strip()}\n"
-        )
+        note_block = f"\n## Clinician note (non-authoritative)\n\n{clinician_note.strip()}\n"
 
     user_content = (
         "## PatientContext\n\n"

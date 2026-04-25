@@ -105,8 +105,10 @@ def pa_letter_mcp_toolsets() -> list[McpToolset]:
     creating a fresh session with no conversation history from the criteria
     evaluation turn.
     """
-    return _streamable_mcp_toolsets([
-        "fetch_patient_context",
-        "match_payer_criteria",
-        "generate_pa_letter",
-    ])
+    return _streamable_mcp_toolsets(
+        [
+            "fetch_patient_context",
+            "match_payer_criteria",
+            "generate_pa_letter",
+        ]
+    )
