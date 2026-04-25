@@ -8,6 +8,26 @@ Newest entries at the top. Link to specific PO docs / support threads / Discord 
 
 ---
 
+## 2026-04-25 — `AGENT_PUBLIC_URL` with `/mcp` → PO HTTP 404 when calling the external agent
+
+**Context**: Same tunnel hostname pattern as `MCP_SERVER_URL`; `.env` had `AGENT_PUBLIC_URL` set to `https://<a2a-tunnel>/mcp` by mistake.
+
+**Observation**: Streamable MCP lives at **`POST …/mcp`** on the **MCP** process (:8000). The **A2A** agent (:8001) serves JSON-RPC at **`POST /`** (see `a2a.utils.constants.DEFAULT_RPC_URL`). If the agent card’s `supportedInterfaces[0].url` ends with `/mcp`, Prompt Opinion posts JSON-RPC to **`/mcp`** on the agent port — Starlette has no such route → **HTTP 404**.
+
+**Workaround / fix**: Set `AGENT_PUBLIC_URL` to the **A2A** public base only (**no path**, or only a path your agent actually serves). As of 2026-04-25, `a2a_agent/po_base/app_factory.py` **`create_a2a_app`** strips a trailing **`/mcp`** (case-insensitive), logs a warning, and still recommends fixing `.env` and restarting `make agent` so intent is clear. `docs/LOCAL_DEV_ONE_MACHINE.md` already says “no trailing path” for `AGENT_PUBLIC_URL`. Additionally, **`JsonRpcPathCompatMiddleware`** (pure ASGI — not ``BaseHTTPMiddleware``, which cannot change routing scope) rewrites **`POST /mcp` → `POST /`** on the A2A app so a stale workspace URL that still posts to `/mcp` on port **8001** no longer yields a bare **HTTP 404** from Starlette.
+
+---
+
+## 2026-04-25 — `MCP_SERVER_URL` without `/mcp` → ADK `McpToolset` gets HTTP 404 from the MCP server
+
+**Context**: PO external agent run; cloudflared or ngrok exposes only the origin (e.g. `https://….trycloudflare.com`). `.env` had `MCP_SERVER_URL` set to that origin without the JSON-RPC path.
+
+**Observation**: FastMCP registers streamable HTTP at **`/mcp`** by default. The MCP Python client posts to the URL you give verbatim. Origin-only URLs hit the outer FastAPI app with no matching MCP route → **404 Not Found**, surfaced to the user as a generic HTTP failure (e.g. “Response status code does not indicate success: 404”).
+
+**Workaround / fix**: Set `MCP_SERVER_URL` to **`https://<tunnel>/mcp`** (see `.env.example`). As of 2026-04-25, `a2a_agent/mcp_patient_context.py` also **auto-appends** `/mcp` when the value is a bare origin, and logs `MCP_SERVER_URL normalized …` at INFO so misconfigurations are visible in `make agent` logs.
+
+---
+
 ## 2026-04-24 — Workspace FHIR `DiagnosticReport?patient=...` search can return 403 (scope) — `prior_imaging` degrades to empty
 
 **Context**: Week-2 live integration. MCP `fetch_patient_context` fans out a parallel `GET .../fhir/DiagnosticReport?patient=<uuid>` alongside Condition, MedicationRequest, Procedure, ServiceRequest, Coverage, and DocumentReference. Live logs showed:

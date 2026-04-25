@@ -47,22 +47,15 @@ def test_sub_agents_tool_wiring_invariants() -> None:
 
     With ``A2A_TESTING_NO_MCP``, ``MCP_SERVER_URL`` is cleared so every
     sub-agent has ``tools=[]`` except for structural checks on live dev where
-    MCP is enabled: ``patient_context`` and ``criteria_evaluator`` each use
-    exactly one :class:`McpToolset`. ``pa_letter`` stays empty until
-    ``generate_pa_letter`` is bound.
+    MCP is enabled: ``patient_context``, ``criteria_evaluator``, and ``pa_letter``
+    each use exactly one :class:`McpToolset``.
     """
 
     for sub in root_agent.sub_agents:
         assert isinstance(sub, LlmAgent), (
             f"sub-agent {sub.name!r} is not an LlmAgent: {type(sub).__name__}"
         )
-        if sub.name == "pa_letter":
-            assert sub.tools == [], (
-                f"sub-agent {sub.name!r} must stay tool-less until generate_pa_letter; "
-                f"got {sub.tools!r}"
-            )
-            continue
-        if sub.name in ("patient_context", "criteria_evaluator"):
+        if sub.name in ("patient_context", "criteria_evaluator", "pa_letter"):
             if not sub.tools:
                 continue
             assert len(sub.tools) == 1, (
@@ -116,6 +109,11 @@ def test_sub_agents_carry_week_1_stub_instruction() -> None:
                 "criteria_evaluator with MCP must use production instruction, not Week-1 stub"
             )
             assert "prior-authorization criteria evaluator" in instruction
+        elif sub.name == "pa_letter" and sub.tools:
+            assert sentinel not in instruction, (
+                "pa_letter with MCP must use production instruction, not Week-1 stub"
+            )
+            assert "prior-authorization letter writer" in instruction
         else:
             assert sentinel in instruction, (
                 f"sub-agent {sub.name!r} is missing the Week-1 stub sentinel "

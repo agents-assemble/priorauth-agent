@@ -51,7 +51,10 @@ Usage:
     )
 """
 
+import logging
+import os
 from typing import Any
+from urllib.parse import urlparse
 
 from a2a.types import (
     AgentCapabilities,
@@ -94,7 +97,55 @@ class AgentCardV1(AgentCard):
     securitySchemes: dict[str, Any] | None = None  # override parent's typed field
 
 
-from a2a_agent.po_base.middleware import ApiKeyMiddleware
+from a2a_agent.po_base.middleware import ApiKeyMiddleware, JsonRpcPathCompatMiddleware
+
+logger = logging.getLogger(__name__)
+
+
+def _normalize_agent_card_public_url(raw: str) -> str:
+    """Strip accidental ``/mcp`` suffix and trailing slashes from the agent base.
+
+    A2A JSON-RPC is posted to ``/`` on the agent process (see ``a2a.utils.constants
+    DEFAULT_RPC_URL``). The MCP server uses ``/mcp``. If ``AGENT_PUBLIC_URL`` is
+    pasted with an ``/mcp`` suffix (easy to confuse with ``MCP_SERVER_URL``),
+    Prompt Opinion will POST JSON-RPC to ``…/mcp`` on port 8001 — Starlette has no
+    such route → **HTTP 404**.
+    """
+    u = raw.strip().rstrip("/")
+    suffix = "/mcp"
+    if len(u) >= len(suffix) and u.lower().endswith(suffix):
+        logger.warning(
+            "AGENT_PUBLIC_URL must be the A2A agent base (no %r path). Stripped "
+            "from %r — restart `make agent` after fixing .env so the agent card "
+            "matches this URL.",
+            suffix,
+            raw,
+        )
+        u = u[: -len(suffix)].rstrip("/")
+    return u
+
+
+def _warn_agent_url_same_host_as_mcp(agent_url: str) -> None:
+    """Same public hostname for MCP and A2A breaks PO (wrong upstream on one port)."""
+    mcp_raw = (os.environ.get("MCP_SERVER_URL") or "").strip()
+    if not mcp_raw or not agent_url.strip():
+        return
+    mcp_base = mcp_raw.strip().rstrip("/")
+    if mcp_base.lower().endswith("/mcp"):
+        mcp_base = mcp_base[: -len("/mcp")].rstrip("/")
+    try:
+        agent_netloc = urlparse(agent_url).netloc
+        mcp_netloc = urlparse(mcp_base).netloc
+    except ValueError:
+        return
+    if agent_netloc and agent_netloc == mcp_netloc:
+        logger.error(
+            "AGENT_PUBLIC_URL host %r matches MCP_SERVER_URL host %r. They must "
+            "be two different tunnels (MCP → :8000, A2A → :8001). PO will see 404s "
+            "or wrong payloads otherwise. See docs/LOCAL_DEV_ONE_MACHINE.md.",
+            agent_netloc,
+            mcp_netloc,
+        )
 
 
 def create_a2a_app(
@@ -136,6 +187,9 @@ def create_a2a_app(
     Returns:
         A Starlette ASGI application ready to be served with uvicorn.
     """
+    public_url = _normalize_agent_card_public_url(url)
+    _warn_agent_url_same_host_as_mcp(public_url)
+
     # Optional FHIR extension — only included when the agent supports it.
     # Uses AgentExtensionV1 to add `params` (SMART scopes) to the serialised JSON.
     # Per the Po spec the extension-level `required` is false — individual scopes
@@ -183,7 +237,7 @@ def create_a2a_app(
     agent_card = AgentCardV1(
         name=name,
         description=description,
-        url=url,  # still required by installed a2a-sdk; remove when library reaches v1
+        url=public_url,  # still required by installed a2a-sdk; remove when library reaches v1
         version=version,
         defaultInputModes=["text/plain"],
         defaultOutputModes=["text/plain"],
@@ -196,7 +250,11 @@ def create_a2a_app(
         # supportedInterfaces replaces url + preferredTransport in A2A v1.
         # First entry is the preferred transport.
         supportedInterfaces=[
-            {"url": url, "protocolBinding": "JSONRPC", "protocolVersion": "1.0"},
+            {
+                "url": public_url,
+                "protocolBinding": "JSONRPC",
+                "protocolVersion": "1.0",
+            },
         ],
         skills=skills or [],
         securitySchemes=security_schemes,
@@ -205,8 +263,9 @@ def create_a2a_app(
 
     app = to_a2a(agent, port=port, agent_card=agent_card)
 
-    # Only attach the key-enforcement middleware for authenticated agents.
+    # Outermost first: normalize mistaken POST /mcp (MCP path) to POST / for A2A.
     if require_api_key:
         app.add_middleware(ApiKeyMiddleware)
+    app.add_middleware(JsonRpcPathCompatMiddleware)
 
     return app

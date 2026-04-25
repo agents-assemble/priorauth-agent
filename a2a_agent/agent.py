@@ -22,16 +22,14 @@ metadata; sub-agents inherit session state via ADK's standard callback
 plumbing, so adding MCP tools to a sub-agent in Week-2 does not require
 re-plumbing the FHIR context.
 
-When ``MCP_SERVER_URL`` is set, ``patient_context`` and
-``criteria_evaluator`` have MCP toolsets; the root instruction below
-allows handoffs to those two. ``pa_letter`` is still unbound until
-``generate_pa_letter`` is wired.
+When ``MCP_SERVER_URL`` is set, the three sub-agents bind MCP tools as
+implemented in ``a2a_agent/mcp_patient_context.py`` (``pa_letter`` only when
+``generate_pa_letter`` is registered on the MCP server).
 
-``criteria_evaluator`` can ``fetch_patient_context`` and
-``match_payer_criteria`` in sequence so a full criteria decision
-works on Prompt Opinion without fragile JSON shuffles between
-sub-agents. Remaining work: ``generate_pa_letter`` and production
-``a2a_agent/prompts/`` tuning.
+``criteria_evaluator`` can call ``fetch_patient_context`` and
+``match_payer_criteria`` (or ``evaluate_prior_auth``) so a full criteria
+decision works on Prompt Opinion without fragile JSON shuffles between
+sub-agents. Production tuning lives in ``a2a_agent/prompts/``.
 """
 
 from __future__ import annotations
@@ -55,9 +53,11 @@ from a2a_agent.sub_agents import (
 logger = logging.getLogger(__name__)
 
 # Week-1: no MCP — root must not delegate to sub-agents (they are stubs).
-# With MCP: patient_context + criteria_evaluator are live; pa_letter waits.
+# With MCP: patient_context + criteria_evaluator gate orchestration; pa_letter
+# is promoted when generate_pa_letter is available on the MCP server.
 _mcp_patient = bool(patient_context_agent.tools)
 _mcp_criteria = bool(criteria_evaluator_agent.tools)
+_mcp_pa_letter = bool(pa_letter_agent.tools)
 _ROOT_WEEK1_OR_MCP_OFF = (
     "You are a prior-authorization specialist for outpatient lumbar MRI "
     "(CPT 72148). Your Week-2 role will be to orchestrate three "
@@ -90,14 +90,26 @@ _ROOT_MCP_ON = (
     "You are a prior-authorization orchestrator for outpatient lumbar MRI "
     "(CPT 72148). You do NOT answer clinical questions yourself. Your only "
     "job is to delegate to sub-agents via `transfer_to_agent`.\n\n"
-    "When FHIR context is present, immediately transfer to `criteria_evaluator`. "
-    "Do not narrate the plan first. Do not transfer to `pa_letter` because its "
-    "tool is not wired yet.\n\n"
+    "Routing rules (apply the FIRST match):\n"
+    + (
+        "1. If the user is asking for a **letter**, **formal letter**, or says "
+        '   "yes" / "proceed" / "go ahead" to a letter prompt → transfer to '
+        "`pa_letter`.\n"
+        "2. If FHIR context is present and the user is asking for a criteria "
+        "   evaluation or prior auth → transfer to `criteria_evaluator`.\n"
+        if _mcp_pa_letter
+        else (
+            "1. If FHIR context is present → transfer to `criteria_evaluator`.\n"
+            "2. Do not transfer to `pa_letter` until `generate_pa_letter` is "
+            "   bound on the MCP server.\n"
+        )
+    )
+    + "3. If no FHIR context is present, say so in one sentence and stop.\n\n"
     "Rules:\n"
     "- NEVER answer clinically from the root agent.\n"
     "- NEVER echo fhir_token, fhir_url, or raw JWT text.\n"
     "- NEVER invent clinical findings, criteria decisions, or PA letters.\n"
-    "- If no FHIR context is present, say so in one sentence and stop."
+    "- Do not narrate the plan — just transfer immediately."
 )
 
 _root_instruction = _ROOT_MCP_ON if _mcp_patient and _mcp_criteria else _ROOT_WEEK1_OR_MCP_OFF
@@ -128,6 +140,12 @@ def _deterministic_transfer(callback_context: Any, llm_request: Any) -> LlmRespo
     )
 
 
+# When pa_letter is live, the root must let the LLM decide routing (criteria
+# vs letter) based on the user message. Deterministic transfer always picks
+# criteria_evaluator, which breaks the "yes, generate the letter" follow-up
+# turn. The extra Gemini call on the root is cheap vs. wrong routing.
+_use_deterministic = _MCP_ACTIVE and not _mcp_pa_letter
+
 root_agent = Agent(
     name="priorauth_agent",
     model=os.environ.get("GEMINI_MODEL", _DEFAULT_MODEL),
@@ -143,5 +161,5 @@ root_agent = Agent(
         criteria_evaluator_agent,
         pa_letter_agent,
     ],
-    before_model_callback=_deterministic_transfer if _MCP_ACTIVE else extract_fhir_context,
+    before_model_callback=_deterministic_transfer if _use_deterministic else extract_fhir_context,
 )

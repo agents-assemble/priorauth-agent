@@ -20,6 +20,7 @@ from shared.fhir_scopes import FHIR_SCOPES
 
 from mcp_server.tools.evaluate_prior_auth import evaluate_prior_auth
 from mcp_server.tools.fetch_patient_context import fetch_patient_context
+from mcp_server.tools.generate_pa_letter import generate_pa_letter
 from mcp_server.tools.match_payer_criteria import match_payer_criteria
 
 
@@ -90,4 +91,14 @@ mcp.tool(
 )(evaluate_prior_auth)
 
 
-# generate_pa_letter    — registered in Week 2
+mcp.tool(
+    name="generate_pa_letter",
+    description=(
+        "Draft a prior-authorization letter (or denial / needs-info response) "
+        "from a PatientContext plus the finalized CriteriaResult. Returns a "
+        "PALetter with HTML and markdown renderings, optional urgent banner "
+        "for red-flag fast-track cases, and a needs-info checklist when "
+        "decision is needs_info. Requires the JSON outputs of fetch_patient_context "
+        "and match_payer_criteria (or evaluate_prior_auth for criteria)."
+    ),
+)(generate_pa_letter)
