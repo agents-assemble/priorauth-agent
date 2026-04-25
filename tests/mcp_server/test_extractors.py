@@ -291,6 +291,20 @@ def test_coverage_routes_payer_name_to_canonical_id(payor_display: str, expected
     assert cov.payer_name == payor_display
 
 
+def test_coverage_payor_reference_without_display_still_routes() -> None:
+    cov = extract_coverage(
+        [
+            {
+                "resourceType": "Coverage",
+                "status": "active",
+                "payor": [{"reference": "Organization/001-cigna-demo-plan"}],
+            }
+        ]
+    )
+    assert cov.payer_id == "cigna"
+    assert "cigna" in cov.payer_name.lower()
+
+
 def test_prior_imaging_filters_to_lumbar_loinc_codes() -> None:
     raw = [
         {

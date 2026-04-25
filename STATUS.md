@@ -16,6 +16,12 @@ Newest entries go at the top. Keep each entry tight — 3 bullets, one line each
 
 ---
 
+## 2026-04-24 — Person B
+
+- Done: Patched PR 22 locally: added combined MCP tool `evaluate_prior_auth`, mapped unmapped payer handling to `needs_info`, improved Coverage payor routing fallback, and tightened A2A routing/tool wiring for `criteria_evaluator`.
+- Blocked: local `.git` write operations are permission-blocked in this environment, so I inspected PR 22 through the GitHub connector instead of checking out the branch directly.
+- Next: run targeted repo validation, then push the same fix set onto the PR branch once git access is available.
+
 ## 2026-04-25 — Person B
 
 - Done: Single-machine handoff for Person A: added [docs/LOCAL_DEV_ONE_MACHINE.md](docs/LOCAL_DEV_ONE_MACHINE.md) (git pull, `.env` table, `make mcp` / `make agent`, `cf-tunnel` + `ngrok` two-URL flow, `MCP_SERVER_URL` + `AGENT_PUBLIC_URL`, PO Hub + External Agents, troubleshooting, link to #17) and linked it from the root [README](README.md) Getting started.

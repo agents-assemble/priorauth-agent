@@ -512,7 +512,11 @@ _PAYER_ROUTING: list[tuple[str, str]] = [
 
 def _route_payer(res: dict[str, Any]) -> tuple[str, str]:
     for payor in res.get("payor", []):
-        name = str(payor.get("display", ""))
+        name = str(payor.get("display", "")).strip()
+        if not name:
+            ref = str(payor.get("reference", "")).strip()
+            if ref and "/" in ref:
+                name = ref.rsplit("/", 1)[-1].replace("-", " ").replace("_", " ")
         if name:
             payer_id = _match_payer_id(name)
             return name, payer_id

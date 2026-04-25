@@ -59,6 +59,7 @@ ignore = [
 
 [tool.ruff.lint.per-file-ignores]
 "tests/**" = ["PLR2004"]  # magic values in tests are fine
+"a2a_agent/mcp_patient_context.py" = ["PLR0911"]  # httpx MCP client has many early-return error branches
 
 # Upstream reference code (copied from prompt-opinion/po-adk-python). We sync
 # this folder periodically; do not fight its upstream style. See a2a_agent/REFERENCE.md.

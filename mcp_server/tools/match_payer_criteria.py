@@ -40,7 +40,7 @@ from shared.models import (
     PatientContext,
 )
 
-from mcp_server.criteria.loader import load_payer_criteria
+from mcp_server.criteria.loader import load_payer_criteria, registered_payer_ids
 from mcp_server.criteria.schema import PayerCriteria, TherapyPathway
 from mcp_server.fhir.context import McpContext
 
@@ -48,6 +48,7 @@ logger = logging.getLogger(__name__)
 
 _RADICULOPATHY_PREFIXES = ("M54.1",)
 _SPONDYLOLISTHESIS_DDD_PREFIXES = ("M43.1", "M51", "M47.8")
+_REGISTERED_PAYERS: frozenset[str] = frozenset(registered_payer_ids())
 
 
 # ---------------------------------------------------------------------------
@@ -210,6 +211,41 @@ def _build_preliminary_findings(
     return "\n".join(lines)
 
 
+def _unknown_payer_criteria_result(
+    context: PatientContext,
+    service_code: str,
+    payer_id: str,
+) -> CriteriaResult:
+    """Return a safe needs-info result for unmapped or unsupported payers."""
+    observed_payor = context.coverage.payer_name.strip() or "[no payor display in FHIR]"
+    supported = ", ".join(sorted(_REGISTERED_PAYERS))
+    return CriteriaResult(
+        decision=Decision.NEEDS_INFO,
+        payer_id=payer_id,
+        service_cpt=service_code,
+        criteria_missing=[
+            CriterionCheck(
+                id="system.payer_not_mapped",
+                description=(
+                    "Coverage must map to a supported payer before criteria can be evaluated"
+                ),
+                met=False,
+                evidence=(
+                    f"Observed Coverage payor: {observed_payor!r}. "
+                    f"Resolved payer_id={payer_id!r}. Supported payer_ids: {supported}."
+                ),
+            )
+        ],
+        confidence=1.0,
+        reasoning_trace=(
+            "Cannot evaluate payer medical-necessity criteria because the patient's "
+            f"Coverage did not resolve to a supported payer. Observed payor: "
+            f"{observed_payor!r}. Supported payer_ids: {supported}."
+        ),
+        source_policy_url=None,
+    )
+
+
 # ---------------------------------------------------------------------------
 # Layer 2 — Gemini reasoning pass
 # ---------------------------------------------------------------------------
@@ -300,6 +336,16 @@ async def match_payer_criteria(
 ) -> CriteriaResult:
     """Evaluate a patient against payer medical-necessity criteria."""
     context = PatientContext.model_validate_json(patient_context_json)
+    payer_id = payer_id.strip()
+
+    if not payer_id or payer_id not in _REGISTERED_PAYERS:
+        logger.info(
+            "match_payer_criteria unknown_payer patient=%s payer_id=%r",
+            context.demographics.patient_id,
+            payer_id,
+        )
+        return _unknown_payer_criteria_result(context, service_code, payer_id)
+
     criteria = load_payer_criteria(payer_id)
 
     logger.info(

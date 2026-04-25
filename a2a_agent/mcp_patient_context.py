@@ -3,7 +3,7 @@
 When ``MCP_SERVER_URL`` is set (e.g. from ``.env``), :class:`McpToolset` connects
 to our ``mcp_server`` streamable HTTP endpoint (``.../mcp``) and exposes the
 selected tools to Gemini. ``patient_context`` uses ``fetch_patient_context``;
-``criteria_evaluator`` uses ``match_payer_criteria``.
+``criteria_evaluator`` uses ``evaluate_prior_auth``.
 
 ``extract_fhir_context`` (``fhir_hook``) writes ``fhir_url`` and ``fhir_token``
 into session state; :func:`_fhir_mcp_headers` injects the SHARP transport headers
@@ -65,13 +65,5 @@ def patient_context_mcp_toolsets() -> list[McpToolset]:
 
 
 def criteria_evaluator_mcp_toolsets() -> list[McpToolset]:
-    """Return fetch + match tools on the shared MCP server, or empty if off.
-
-    ``fetch_patient_context`` is included alongside ``match_payer_criteria`` so
-    the criteria sub-agent can run a self-contained sequence on PO
-    (patient_id is in the FHIR system note) without depending on a fragile
-    inter-sub-agent copy of a large JSON blob. ``patient_context`` is still
-    the dedicated retrieval step in the multi-agent flow when the root
-    orchestrates a longer trace.
-    """
-    return _streamable_mcp_toolsets(["fetch_patient_context", "match_payer_criteria"])
+    """Return the combined criteria-evaluation tool on the shared MCP server."""
+    return _streamable_mcp_toolsets(["evaluate_prior_auth"])
