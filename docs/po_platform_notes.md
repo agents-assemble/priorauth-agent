@@ -8,6 +8,29 @@ Newest entries at the top. Link to specific PO docs / support threads / Discord 
 
 ---
 
+## 2026-04-24 — Workspace FHIR `DiagnosticReport?patient=...` search can return 403 (scope) — `prior_imaging` degrades to empty
+
+**Context**: Week-2 live integration. MCP `fetch_patient_context` fans out a parallel `GET .../fhir/DiagnosticReport?patient=<uuid>` alongside Condition, MedicationRequest, Procedure, ServiceRequest, Coverage, and DocumentReference. Live logs showed:
+
+```
+HTTP Request: GET https://app.promptopinion.ai/api/workspaces/.../fhir/DiagnosticReport?patient=...
+"HTTP/1.1 403 Forbidden"
+fhir_search_error resource=DiagnosticReport status=403 body={"resourceType":"OperationOutcome","issue":[{
+  "severity":"error","code":"forbidden",
+  "details":{"text":"Insufficient scope access to search for resources of type DiagnosticReport"}
+}]}
+```
+
+**Observation**: The SHARP-propagated Bearer token is valid for other patient-scoped searches on the same workspace (200 on Coverage, DocumentReference, Patient read, etc.), but the FHIR server explicitly refuses **search** on `DiagnosticReport` for this token’s effective scopes. This is a server-side scope matrix, not a bad patient id — the `OperationOutcome` text names the resource type and “Insufficient scope access.”
+
+**Explanation / workaround**: `mcp_server/tools/fetch_patient_context.py` → `_safe_search` already treats non-success search HTTP statuses as **degraded success**: it logs `fhir_search_error` at warning and returns **`[]`** (see `httpx.HTTPStatusError` branch), so the tool still returns a full `PatientContext` with `prior_imaging=[]` from `extract_prior_imaging` on an empty bundle. **No change required** for the tool to stay up; the gap is **evidence**: criteria that depend on prior lumbar imaging from `DiagnosticReport` (e.g. payer “documented prior diagnostic work-up”) may be under-informed on PO until scope includes that resource or PO exposes prior imaging another way. Other paths (e.g. progress-note text in `DocumentReference`, structured `Condition` / `ServiceRequest`) remain available. If product needs prior imaging on PO, follow up with Prompt Opinion on whether `DiagnosticReport` read/search can be added to the external-agent FHIR scope set; until then, assume `prior_imaging` may be empty in live runs even when imaging exists in the chart UI.
+
+**Impact**: Integration tests use `httpx.MockTransport` and often return synthetic `DiagnosticReport` entries — they overstate `prior_imaging` vs live PO. Golden tests tied to bundle fixtures remain valid; **live** PO validation should not expect `prior_imaging` to be non-empty. Rule engine / letter prompts should already tolerate missing prior imaging (needs_info or narrative from notes). Optional future hardening: one-line comment in `fetch_patient_context` module docstring pointing to this note so agents do not “fix” 403 by raising.
+
+**Source**: Observed 2026-04-24 during live PO runs (patient ids `c1960074-...` and `758fe839-...`); same 403 on both. Terminal capture: MCP `fhir_search_error resource=DiagnosticReport status=403`.
+
+---
+
 ## 2026-04-24 — MCP (:8000) and A2A (:8001) MUST be registered under distinct public hostnames
 
 **Context**: Registering both services in one PO workspace. The MCP server goes in the workspace Server Hub (`https://<host>/mcp`); the A2A agent goes in the External Agents UI as a base URL (no path). During Sanjit's Week-1 round-trip a single reserved ngrok hostname was accidentally pointed at both `:8000` and `:8001` — either via ad-hoc `ngrok http <port>` invocations reusing the same default hostname, or via the terminal UI briefly showing two forwarding lines with the same public host mapping to both ports.

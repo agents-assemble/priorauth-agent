@@ -16,6 +16,12 @@ Newest entries go at the top. Keep each entry tight — 3 bullets, one line each
 
 ---
 
+## 2026-04-25 — Person A
+
+- Done: **Week 2 Day 6 integration checkpoint — documented closure.** Appended `docs/po_platform_notes.md` (2026-04-24 entry): live PO workspace FHIR returns **403** on `GET DiagnosticReport?patient=...` with *Insufficient scope access*; MCP `_safe_search` degrades to empty `prior_imaging` (tool still 200). Cross-linked from `mcp_server/README.md` and `mcp_server/tools/fetch_patient_context.py` module docstring so live PO vs mock tests are not confused. `shared/` contracts: no code change this pass — checkpoint is doc + platform capture for the same A2A+MCP+three-patient runs the team already green-lit.
+- Blocked: nothing.
+- Next: Week 2 endgame per `docs/PLAN.md` — `generate_pa_letter` + golden tests if not already on `main`, A2A orchestrator tool bind + Fly.io for both services; PO workspace URL swap off ngrok.
+
 ## 2026-04-25 — Person B
 
 - Done: Single-machine handoff for Person A: added [docs/LOCAL_DEV_ONE_MACHINE.md](docs/LOCAL_DEV_ONE_MACHINE.md) (git pull, `.env` table, `make mcp` / `make agent`, `cf-tunnel` + `ngrok` two-URL flow, `MCP_SERVER_URL` + `AGENT_PUBLIC_URL`, PO Hub + External Agents, troubleshooting, link to #17) and linked it from the root [README](README.md) Getting started.

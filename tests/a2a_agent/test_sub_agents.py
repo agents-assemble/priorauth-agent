@@ -12,6 +12,7 @@ from __future__ import annotations
 
 from a2a_agent.agent import root_agent
 from google.adk.agents import LlmAgent
+from google.adk.tools import FunctionTool
 from google.adk.tools.mcp_tool import McpToolset
 
 _EXPECTED_SUB_AGENT_NAMES = {
@@ -65,12 +66,11 @@ def test_sub_agents_tool_wiring_invariants() -> None:
         if sub.name in ("patient_context", "criteria_evaluator"):
             if not sub.tools:
                 continue
-            assert len(sub.tools) == 1, (
-                f"{sub.name} must use a single McpToolset, got {sub.tools!r}"
-            )
-            assert isinstance(sub.tools[0], McpToolset), (
-                f"expected McpToolset on {sub.name}, got {type(sub.tools[0])!r}"
-            )
+            for tool in sub.tools:
+                assert isinstance(tool, (McpToolset, FunctionTool)), (
+                    f"expected McpToolset or FunctionTool on {sub.name}, "
+                    f"got {type(tool)!r}"
+                )
             continue
         assert sub.tools == [], f"sub-agent {sub.name!r} has unexpected tools: {sub.tools!r}"
 
@@ -115,7 +115,7 @@ def test_sub_agents_carry_week_1_stub_instruction() -> None:
             assert sentinel not in instruction, (
                 "criteria_evaluator with MCP must use production instruction, not Week-1 stub"
             )
-            assert "Prior-authorization criteria evaluator" in instruction
+            assert "prior-authorization criteria evaluator" in instruction
         else:
             assert sentinel in instruction, (
                 f"sub-agent {sub.name!r} is missing the Week-1 stub sentinel "

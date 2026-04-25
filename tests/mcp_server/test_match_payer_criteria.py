@@ -320,6 +320,39 @@ async def test_wrong_cpt_denies() -> None:
     assert result.confidence == 1.0
 
 
+@pytest.mark.asyncio
+async def test_empty_payer_id_needs_info_no_tool_error() -> None:
+    """Coverage unmapped (synthetic PO patients) must not raise; returns NEEDS_INFO."""
+    ctx = _patient_a()
+    ctx = ctx.model_copy(
+        update={"coverage": Coverage(payer_id="", payer_name="Prompt Opinion Demo Plan")}
+    )
+    result = await match_payer_criteria(
+        patient_context_json=ctx.model_dump_json(),
+        payer_id="",
+        service_code="72148",
+        ctx=None,  # type: ignore[arg-type]
+    )
+    assert result.decision == Decision.NEEDS_INFO
+    assert result.criteria_missing
+    assert result.criteria_missing[0].id == "system.payer_not_mapped"
+    assert result.source_policy_url is None
+
+
+@pytest.mark.asyncio
+async def test_unknown_payer_slug_needs_info() -> None:
+    """Non-registered payer_id (e.g. typo) -> NEEDS_INFO, no load_payer_criteria."""
+    ctx = _patient_a()
+    result = await match_payer_criteria(
+        patient_context_json=ctx.model_dump_json(),
+        payer_id="humana",
+        service_code="72148",
+        ctx=None,  # type: ignore[arg-type]
+    )
+    assert result.decision == Decision.NEEDS_INFO
+    assert result.criteria_missing[0].id == "system.payer_not_mapped"
+
+
 # ---------------------------------------------------------------------------
 # Tier 2 — full tool integration tests (calls Gemini, @pytest.mark.llm)
 # ---------------------------------------------------------------------------

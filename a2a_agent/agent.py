@@ -36,9 +36,13 @@ sub-agents. Remaining work: ``generate_pa_letter`` and production
 
 from __future__ import annotations
 
+import logging
 import os
+from typing import Any
 
 from google.adk.agents import Agent
+from google.adk.models.llm_response import LlmResponse
+from google.genai import types
 
 from a2a_agent._model import _DEFAULT_MODEL
 from a2a_agent.po_base.fhir_hook import FHIR_CONTEXT_NOTE_PREFIX, extract_fhir_context
@@ -47,6 +51,8 @@ from a2a_agent.sub_agents import (
     pa_letter_agent,
     patient_context_agent,
 )
+
+_logger = logging.getLogger(__name__)
 
 # Week-1: no MCP — root must not delegate to sub-agents (they are stubs).
 # With MCP: patient_context + criteria_evaluator are live; pa_letter waits.
@@ -81,25 +87,67 @@ _ROOT_WEEK1_OR_MCP_OFF = (
 )
 
 _ROOT_MCP_ON = (
-    "You are a prior-authorization specialist for outpatient lumbar MRI "
-    "(CPT 72148). The sub-agents `patient_context` and `criteria_evaluator` "
-    "are wired to the MCP server. You MAY transfer to them in order: first "
-    "`patient_context` to fetch normalized patient context, then "
-    "`criteria_evaluator` to evaluate payer criteria (or transfer directly "
-    "to `criteria_evaluator` if only a criteria decision is needed; it can "
-    "call fetch then match on its own). The `pa_letter` sub-agent has no MCP "
-    "tool yet — do NOT transfer to `pa_letter` until that tool is wired; "
-    "acknowledge a letter request with a one-line deferral. "
-    "In every turn: (1) confirm FHIR using the system note: look for a line "
-    f"beginning with `{FHIR_CONTEXT_NOTE_PREFIX}` and confirm `patient_id` "
-    "if present. (2) Summarize the user's request. (3) Delegate or report "
-    "per above. "
-    "NEVER echo the fhir_token or fhir_url. NEVER invent clinical details "
-    "or a PA body from this root agent; letters stay the future `pa_letter` "
-    "responsibility."
+    "You are a prior-authorization orchestrator for outpatient lumbar MRI "
+    "(CPT 72148). You do NOT answer clinical questions yourself. Your ONLY "
+    "job is to delegate to sub-agents by calling `transfer_to_agent`.\n\n"
+    "When a prior-authorization request arrives with FHIR context (look for "
+    f"a line beginning with `{FHIR_CONTEXT_NOTE_PREFIX}`), you MUST "
+    "IMMEDIATELY call `transfer_to_agent` with agent_name "
+    "`criteria_evaluator`. Do NOT generate any text before the transfer — "
+    "just call the function. The `criteria_evaluator` sub-agent will fetch "
+    "patient data and evaluate payer criteria on its own.\n\n"
+    "Rules:\n"
+    "- NEVER answer the clinical question yourself.\n"
+    "- NEVER narrate what you plan to do — just transfer.\n"
+    "- NEVER transfer to `pa_letter` (its tool is not wired yet).\n"
+    "- NEVER echo fhir_token, fhir_url, or raw JWT text.\n"
+    "- NEVER invent clinical findings, criteria decisions, or PA letters.\n"
+    "- If no FHIR context is present, say so in one sentence and stop."
 )
 
 _root_instruction = _ROOT_MCP_ON if _mcp_patient and _mcp_criteria else _ROOT_WEEK1_OR_MCP_OFF
+
+_MCP_ACTIVE = _mcp_patient and _mcp_criteria
+
+
+def _deterministic_transfer(callback_context: Any, llm_request: Any) -> LlmResponse | None:
+    """Skip the root LLM call entirely when MCP tools are active.
+
+    When FHIR context is present, the root agent's only job is to call
+    ``transfer_to_agent(criteria_evaluator)``. That is a fixed routing
+    decision — burning a Gemini call for it wastes 1 of the 5-RPM
+    free-tier budget. This callback short-circuits the LLM by returning
+    a synthetic ``function_call`` response, saving ~20% of the per-
+    request quota.
+
+    Falls through to the LLM (returns None) when no FHIR context is
+    found so the root can respond with a human-readable error.
+    """
+    extract_fhir_context(callback_context, llm_request)  # type: ignore[no-untyped-call]
+
+    state = callback_context.state
+    patient_id = (state.get("patient_id") or "").strip()
+
+    if not patient_id:
+        return None
+
+    _logger.info("DETERMINISTIC_TRANSFER patient_id=%s → criteria_evaluator", patient_id)
+
+    return LlmResponse(
+        content=types.Content(
+            role="model",
+            parts=[
+                types.Part(
+                    function_call=types.FunctionCall(
+                        name="transfer_to_agent",
+                        args={"agent_name": "criteria_evaluator"},
+                    )
+                )
+            ],
+        ),
+        turn_complete=True,
+    )
+
 
 root_agent = Agent(
     name="priorauth_agent",
@@ -116,5 +164,5 @@ root_agent = Agent(
         criteria_evaluator_agent,
         pa_letter_agent,
     ],
-    before_model_callback=extract_fhir_context,
+    before_model_callback=_deterministic_transfer if _MCP_ACTIVE else extract_fhir_context,
 )

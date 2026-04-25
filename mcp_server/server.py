@@ -18,6 +18,7 @@ from typing import Any
 from mcp.server.fastmcp import FastMCP
 from shared.fhir_scopes import FHIR_SCOPES
 
+from mcp_server.tools.evaluate_prior_auth import evaluate_prior_auth
 from mcp_server.tools.fetch_patient_context import fetch_patient_context
 from mcp_server.tools.match_payer_criteria import match_payer_criteria
 
@@ -77,6 +78,18 @@ mcp.tool(
         "all other cases use a Gemini reasoning pass over the clinical context."
     ),
 )(match_payer_criteria)
+
+
+mcp.tool(
+    name="evaluate_prior_auth",
+    description=(
+        "All-in-one prior-authorization evaluation. Fetches the patient's "
+        "clinical context from the FHIR server and evaluates it against "
+        "the payer's medical-necessity criteria in a single call. Returns "
+        "a CriteriaResult with decision, met/missing criteria, evidence, "
+        "and a reasoning trace."
+    ),
+)(evaluate_prior_auth)
 
 
 # generate_pa_letter    — registered in Week 2

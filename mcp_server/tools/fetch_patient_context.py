@@ -16,6 +16,10 @@ Two execution paths:
   conditions (e.g. Patient C's history_of_cancer from Z85.3) AND text
   findings that have no structured ICD yet (e.g. Patient C's saddle
   anesthesia / acute urinary retention captured only in the progress note).
+  **Live PO:** `DiagnosticReport` search may return HTTP **403** (token
+  scope omits that resource type); `_safe_search` logs and treats it as
+  an empty bundle so `prior_imaging` is empty while the rest of the
+  context is still built — see `docs/po_platform_notes.md` (2026-04-24).
 
 - **Demo fallback** (no FHIR context): returns one of the three hard-coded
   demo patients. Local curl development path before PO registration is live;

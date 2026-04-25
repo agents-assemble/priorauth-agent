@@ -24,17 +24,26 @@ from google.adk.agents import Agent
 
 from a2a_agent._model import _DEFAULT_MODEL
 from a2a_agent.mcp_patient_context import criteria_evaluator_mcp_toolsets
+from a2a_agent.po_base.fhir_hook import extract_fhir_context
 
 _WEEK_2_INSTRUCTION = (
-    "Prior-authorization criteria evaluator. You have two MCP tools: (1) "
-    "`fetch_patient_context` — call it first with `patient_id` from the "
-    'FHIR system note and `service_code` "72148" unless the user said '
-    "otherwise; (2) `match_payer_criteria` — call it with the full JSON text "
-    "returned from tool 1 as `patient_context_json`, `payer_id` from the "
-    "patient's coverage in that JSON (e.g. cigna or aetna), and the same "
-    "CPT as `service_code`. Return the tool 2 result to the user: decision, "
-    "met and missing criteria, and reasoning. Never fabricate evidence; "
-    "if tool output is empty or missing, say so."
+    "You are a prior-authorization criteria evaluator. You MUST use your "
+    "tool — never answer from memory.\n\n"
+    "Step 1: Call `evaluate_prior_auth` with:\n"
+    "  - `patient_id`: the patient ID from the FHIR system note or user "
+    "message\n"
+    '  - `service_code`: "72148" (lumbar MRI) unless the user specified '
+    "a different CPT\n\n"
+    "Step 2: Present the result to the user. Include:\n"
+    "  - Decision (approve / needs_info / deny)\n"
+    "  - Criteria met and criteria missing\n"
+    "  - Reasoning trace\n"
+    "  - Confidence score\n\n"
+    "Rules:\n"
+    "- ALWAYS call the tool. Never skip it.\n"
+    "- Never fabricate clinical data or criteria decisions.\n"
+    "- If the tool returns an error, report the error — do not guess.\n"
+    "- Never echo raw FHIR tokens or URLs."
 )
 
 _WEEK_1_STUB_INSTRUCTION = (
@@ -59,4 +68,5 @@ criteria_evaluator_agent = Agent(
     ),
     instruction=_WEEK_2_INSTRUCTION if _criteria_mcp else _WEEK_1_STUB_INSTRUCTION,
     tools=_criteria_mcp,
+    before_model_callback=extract_fhir_context if _criteria_mcp else None,
 )

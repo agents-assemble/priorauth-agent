@@ -16,8 +16,12 @@ FastMCP server — the "Superpower" toolkit for prior authorization.
 `Condition`, `MedicationRequest`, `Procedure`, `ServiceRequest`,
 `Coverage`, `DiagnosticReport`, `DocumentReference`) when a SHARP context
 is present, and falls back to a hardcoded Patient A fixture when not
-(local-curl dev path before PO registration is live). Two extraction
-modules consume the bundle:
+(local-curl dev path before PO registration is live). On **live**
+`app.promptopinion.ai` workspace FHIR, the `DiagnosticReport` search may
+return **403** (insufficient token scope) — the tool still succeeds with
+`prior_imaging=[]`; see [`docs/po_platform_notes.md`](../docs/po_platform_notes.md)
+(2026-04-24 entry). Mock/CI transports usually return reports; do not
+assume live PO matches. Two extraction modules consume the bundle:
 
 - `mcp_server/fhir/extractors.py` maps structured codes (RxNorm / CPT /
   ICD-10 / LOINC) to typed `shared.models` instances and emits ICD-driven
