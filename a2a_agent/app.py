@@ -15,8 +15,8 @@ For the Week-1 Platform Spike we advertised the FHIR scopes so PO could
 exercise the FHIR-metadata flow end-to-end. When ``MCP_SERVER_URL`` is set, the
 ``patient_context`` sub-agent calls ``fetch_patient_context`` and
 ``criteria_evaluator`` calls ``match_payer_criteria`` (see
-``a2a_agent/mcp_patient_context.py``). ``pa_letter`` is still Week-2 until
-``generate_pa_letter`` is registered on the MCP server and bound here.
+``a2a_agent/mcp_patient_context.py``). ``pa_letter`` binds ``generate_pa_letter``
+when the MCP server exposes that tool (same ``MCP_SERVER_URL`` gate).
 This lets us validate the full round-trip
 (PO chat -> our agent card -> X-API-Key call -> FHIR-metadata extraction ->
 Gemini -> response) as we wire the remaining tools and orchestrator

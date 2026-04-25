@@ -51,6 +51,11 @@ future syncs don't accidentally treat them as adapted code:
   `red_flags[].canonical_labels` widens, this module's
   `_REDFLAG_PATTERNS` must widen with it (otherwise the rule engine has
   a label the extractor will never produce).
+- `mcp_server/tools/generate_pa_letter.py` + `mcp_server/prompts/generate_pa_letter_v1.md`
+  — Gemini JSON → `PALetter` with server-side normalization of decision,
+  patient/payer/service ids, `source_criteria_version`, urgent banner, and
+  needs-info checklist backfill. Tiered tests in `tests/mcp_server/test_generate_pa_letter.py`.
+  A2A exposes it via `pa_letter_mcp_toolsets()` (`McpToolset` + `header_provider`, same as PR #22).
 
 ## What we did NOT copy
 

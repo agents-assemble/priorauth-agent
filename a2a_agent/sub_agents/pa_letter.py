@@ -1,19 +1,16 @@
 """PA Letter sub-agent — prior-authorization letter writer.
 
-Week-1 scope: pass-through stub. The production instruction (PLAN.md:235)
-is preserved verbatim in ``_WEEK_2_INSTRUCTION`` below. The active
-instruction is a Week-1 stub that explicitly forbids fabrication — same
-defense-in-depth rationale as ``patient_context`` (see that module's
-docstring for the full reasoning, anchored in the PR #9 confabulation
-bug and PR #13 review). A letter-writing sub-agent fabricating under
-missing-tool conditions is the worst-case variant of that class of bug:
-an unsupported-by-chart PA letter is exactly the output the system must
-never produce.
+Without ``MCP_SERVER_URL`` this sub-agent is a pass-through stub
+(``tools=[]`` + Week-1 stub instruction). The production line (PLAN.md:235)
+is in ``_WEEK_2_INSTRUCTION``; with MCP, ``pa_letter_mcp_toolsets()`` binds
+``generate_pa_letter``. Same anti-confabulation pattern as
+``patient_context`` / ``criteria_evaluator`` (see those modules' docstrings).
 
-Week-2 swap is two lines:
+Week-2 binding (MCP when ``MCP_SERVER_URL`` is set — see
+``a2a_agent.mcp_patient_context.pa_letter_mcp_toolsets``):
 
     instruction=_WEEK_2_INSTRUCTION
-    tools=[generate_pa_letter]
+    tools=pa_letter_mcp_toolsets()
 
 See ``a2a_agent/sub_agents/__init__.py`` for the re-export surface consumed
 by ``a2a_agent.agent.root_agent.sub_agents``.
@@ -26,11 +23,33 @@ import os
 from google.adk.agents import Agent
 
 from a2a_agent._model import _DEFAULT_MODEL
+from a2a_agent.mcp_patient_context import pa_letter_mcp_toolsets
+from a2a_agent.po_base.fhir_hook import extract_fhir_context
 
 _WEEK_2_INSTRUCTION = (
-    "Prior-authorization writer. Given context and criteria result, "
-    "produce the ready-to-submit PA letter (or needs-info checklist). "
-    "Cite every claim against the context — no unsupported assertions."
+    "You are a prior-authorization letter writer. You MUST use your tools — "
+    "never draft a letter, checklist, or denial from memory.\n\n"
+    "Step 1: Get the `patient_id` from the FHIR system note in your input "
+    "(look for `[SYSTEM NOTE — FHIR context received`). If no system note, "
+    "use any patient ID the user or orchestrator provided.\n\n"
+    "Step 2: Call `fetch_patient_context` with the patient_id and "
+    'service_code "72148" (or whatever CPT the user specified). Save the '
+    "full JSON result — this is your **PatientContext**.\n\n"
+    "Step 3: Call `match_payer_criteria` with:\n"
+    "  - `patient_context_json`: the PatientContext JSON from Step 2\n"
+    '  - `service_code`: "72148"\n'
+    "Save the full JSON result — this is your **CriteriaResult**.\n\n"
+    "Step 4: Call `generate_pa_letter` with:\n"
+    "  - `patient_context_json`: the PatientContext JSON from Step 2\n"
+    "  - `criteria_result_json`: the CriteriaResult JSON from Step 3\n"
+    "  - `clinician_note` (optional): only non-clinical tone or logistics\n\n"
+    "Step 5: Present the returned PALetter to the user (subject line, "
+    "rendered body, checklist if needs_info, urgent banner if applicable).\n\n"
+    "Rules:\n"
+    "- ALWAYS call all three tools in sequence. Never skip any step.\n"
+    "- Never fabricate clinical data or letter content.\n"
+    "- If any tool returns an error, report the error — do not guess.\n"
+    "- Never echo raw FHIR tokens or URLs."
 )
 
 _WEEK_1_STUB_INSTRUCTION = (
@@ -43,6 +62,7 @@ _WEEK_1_STUB_INSTRUCTION = (
     "instruction (PLAN.md line 235)."
 )
 
+_pa_mcp = pa_letter_mcp_toolsets()
 pa_letter_agent = Agent(
     name="pa_letter",
     model=os.environ.get("GEMINI_MODEL", _DEFAULT_MODEL),
@@ -52,6 +72,7 @@ pa_letter_agent = Agent(
         "evidence is missing, or a red-flag fast-track letter when a red "
         "flag bypasses standard criteria."
     ),
-    instruction=_WEEK_1_STUB_INSTRUCTION,
-    tools=[],
+    instruction=_WEEK_2_INSTRUCTION if _pa_mcp else _WEEK_1_STUB_INSTRUCTION,
+    tools=_pa_mcp,
+    before_model_callback=extract_fhir_context if _pa_mcp else None,
 )

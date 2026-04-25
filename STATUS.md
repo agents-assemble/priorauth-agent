@@ -16,6 +16,12 @@ Newest entries go at the top. Keep each entry tight — 3 bullets, one line each
 
 ---
 
+## 2026-04-25 — Cursor (Person A track)
+
+- Done: Shipped MCP tool **`generate_pa_letter`** (`mcp_server/tools/generate_pa_letter.py` + `prompts/generate_pa_letter_v1.md`): Gemini JSON → `PALetter`, server-side normalization (decision/ids/`source_criteria_version`/urgent banner/checklist backfill). Registered in `mcp_server/server.py`. A2A: `pa_letter_mcp_toolsets()` on shared `McpToolset` (aligned with PR #22), `pa_letter` sub-agent Week-2 instruction/tools/`extract_fhir_context` when `MCP_SERVER_URL` set. Tests: `tests/mcp_server/test_generate_pa_letter.py`, `test_sub_agents.py` updated; `mcp_server/REFERENCE.md`.
+- Blocked: nothing.
+- Next: Person B — root orchestrator handoffs so `pa_letter` reliably receives both JSON blobs.
+
 ## 2026-04-24 — Person B
 
 - Done: Patched PR 22 locally: added combined MCP tool `evaluate_prior_auth`, mapped unmapped payer handling to `needs_info`, improved Coverage payor routing fallback, and tightened A2A routing/tool wiring for `criteria_evaluator`.

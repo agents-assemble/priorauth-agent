@@ -3,14 +3,14 @@
 Without ``MCP_SERVER_URL`` this sub-agent is a pass-through stub
 (``tools=[]`` + Week-1 stub instruction). The production line (PLAN.md:234) is
 in ``_WEEK_2_INSTRUCTION``; with MCP, ``criteria_evaluator_mcp_toolsets()`` binds
-``match_payer_criteria``. Same anti-confabulation pattern as
+``evaluate_prior_auth``. Same anti-confabulation pattern as
 ``patient_context`` (see its docstring, PR #9 / PR #13).
 
 Week-2 binding (MCP when ``MCP_SERVER_URL`` is set — see
 ``a2a_agent.mcp_patient_context.criteria_evaluator_mcp_toolsets``):
 
     instruction=_WEEK_2_INSTRUCTION
-    tools=criteria_evaluator_mcp_toolsets()  # fetch + match; see module doc
+    tools=criteria_evaluator_mcp_toolsets()  # combined fetch + match; see module doc
 
 See ``a2a_agent/sub_agents/__init__.py`` for the re-export surface consumed
 by ``a2a_agent.agent.root_agent.sub_agents``.

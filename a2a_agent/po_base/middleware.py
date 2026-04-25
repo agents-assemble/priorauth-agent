@@ -16,6 +16,7 @@ import os
 from starlette.middleware.base import BaseHTTPMiddleware
 from starlette.requests import Request  # kept for type hints in dispatch signature
 from starlette.responses import JSONResponse
+from starlette.types import ASGIApp, Receive, Scope, Send
 
 from a2a_agent.po_base.fhir_hook import extract_fhir_from_payload
 from a2a_agent.po_base.logging_utils import redact_headers, safe_pretty_json, token_fingerprint
@@ -64,6 +65,27 @@ def _load_valid_api_keys() -> set[str]:
 VALID_API_KEYS: set[str] = _load_valid_api_keys()
 
 
+class JsonRpcPathCompatMiddleware:
+    """Pure ASGI shim: rewrite ``POST /mcp`` to ``POST /`` before routing.
+
+    ``BaseHTTPMiddleware`` always forwards the **original** ASGI ``scope`` to
+    the inner app, so mutating ``Request.url`` cannot fix routing. A2A JSON-RPC
+    is only registered on ``/``; mistaken ``POST /mcp`` on port **8001** would
+    otherwise return **HTTP 404**.
+    """
+
+    def __init__(self, app: ASGIApp) -> None:
+        self.app = app
+
+    async def __call__(self, scope: Scope, receive: Receive, send: Send) -> None:
+        if scope["type"] == "http" and scope["method"] == "POST":
+            path = (scope.get("path") or "").rstrip("/") or "/"
+            if path == "/mcp":
+                logger.info("a2a_jsonrpc_path_compat rewrote POST /mcp -> /")
+                scope = {**scope, "path": "/", "raw_path": b"/"}
+        await self.app(scope, receive, send)
+
+
 class ApiKeyMiddleware(BaseHTTPMiddleware):
     """
     Starlette middleware that enforces X-API-Key authentication.
@@ -89,6 +111,7 @@ class ApiKeyMiddleware(BaseHTTPMiddleware):
         _METHOD_ALIASES: dict[str, str] = {
             "SendMessage": "message/send",
             "SendStreamingMessage": "message/send",  # PO client can't parse SSE; use non-streaming
+            "SendA2AMessage": "message/send",  # PO tool / legacy name → A2A v1 JSON-RPC
             "GetTask": "tasks/get",
             "CancelTask": "tasks/cancel",
             "TaskResubscribe": "tasks/resubscribe",
@@ -108,6 +131,21 @@ class ApiKeyMiddleware(BaseHTTPMiddleware):
                 original_method,
                 parsed["method"],
             )
+
+        # Strip taskId from message/send when the task is already terminal.
+        # PO reuses the completed task's ID on follow-up messages (known bug —
+        # see docs/po_support_drafts.md). The a2a-sdk rejects with -32602
+        # "Task … is in terminal state: completed". Removing taskId forces the
+        # SDK to create a fresh task while contextId still links the conversation.
+        if isinstance(parsed, dict) and parsed.get("method") == "message/send":
+            msg = (parsed.get("params") or {}).get("message")
+            if isinstance(msg, dict) and "taskId" in msg:
+                old_tid = msg.pop("taskId")
+                body_dirty = True
+                logger.info(
+                    "po_taskid_stripped old_task_id=%s (workaround for PO terminal-task reuse)",
+                    old_tid,
+                )
 
         # Normalise proto-style role values in every message in the payload.
         # Prompt Opinion sends ROLE_USER / ROLE_AGENT; the a2a-sdk expects user / agent.
