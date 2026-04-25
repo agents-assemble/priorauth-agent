@@ -27,11 +27,7 @@ async def evaluate_prior_auth(
     ],
     service_code: Annotated[
         str,
-        Field(
-            description=(
-                "CPT code of the requested service, e.g. '72148' for lumbar MRI."
-            )
-        ),
+        Field(description=("CPT code of the requested service, e.g. '72148' for lumbar MRI.")),
     ],
     ctx: McpContext,
 ) -> CriteriaResult:

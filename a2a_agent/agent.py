@@ -127,6 +127,7 @@ def _deterministic_transfer(callback_context: Any, llm_request: Any) -> LlmRespo
         turn_complete=True,
     )
 
+
 root_agent = Agent(
     name="priorauth_agent",
     model=os.environ.get("GEMINI_MODEL", _DEFAULT_MODEL),
