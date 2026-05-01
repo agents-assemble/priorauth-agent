@@ -34,14 +34,24 @@ will enforce this; still output it correctly).
 
 - **subject_line**: Concise, professional subject for fax or portal upload
   (include payer name, CPT, patient id if helpful).
-- **sections**: Logical headings (e.g. Request, Clinical summary,
-  Medical necessity, Attachments). Each has `heading` and `body` (plain text
-  or light markdown in `body`; `rendered_html` / `rendered_markdown` carry
-  the full formatted versions).
-- **rendered_html**: Full HTML document suitable for display (semantic tags,
-  escape angle brackets in narrative text conceptually — you output valid
-  HTML string).
-- **rendered_markdown**: Full markdown equivalent of the same content.
+- **sections**: You MUST use these exact headings in this exact order:
+  1. **Request** — What is being requested (CPT, procedure, ordering provider).
+  2. **Patient Information** — Demographics, member ID, payer/plan.
+  3. **Clinical Summary** — Active conditions, symptoms, exam findings.
+  4. **Conservative Treatment History** — Each therapy trial: type, duration,
+     dates, outcome.
+  5. **Medical Necessity** — Why criteria are met (approve) or what is missing
+     (needs_info/deny). Reference specific payer criteria.
+     For `needs_info` decisions, use heading "Missing Documentation" instead.
+  6. **Supporting Documentation** — List of referenced clinical documents.
+
+  Do NOT add extra sections beyond these six. Do NOT reorder them.
+  Each section has `heading` (exact string above) and `body` (plain text or
+  light markdown).
+- **rendered_html**: Set to `""` (empty string). The server renders HTML from
+  your structured sections.
+- **rendered_markdown**: Set to `""` (empty string). The server renders
+  markdown from your structured sections.
 - **needs_info_checklist**: When `decision == needs_info`, populate with
   short, actionable bullets (one string per missing item), aligned with
   `criteria_missing` from CriteriaResult. When not needs_info, use `[]`.

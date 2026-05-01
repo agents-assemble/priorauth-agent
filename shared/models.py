@@ -198,3 +198,23 @@ class PALetter(BaseModel):
     source_criteria_version: str = Field(
         description="Version tag of the payer criteria JSON used, e.g. 'cigna_lumbar_mri.v1'."
     )
+
+
+# ---------------------------------------------------------------------------
+# Level 4: Combined pipeline result (produced by run_prior_auth)
+# ---------------------------------------------------------------------------
+
+
+class PriorAuthResult(BaseModel):
+    """Combined result from the full prior-auth pipeline.
+
+    Produced by the MCP tool ``run_prior_auth``. Contains both the
+    criteria evaluation and the generated letter so the entire PA
+    workflow completes in a single tool call.
+    """
+
+    criteria: CriteriaResult
+    letter: PALetter | None = Field(
+        default=None,
+        description="Generated PA letter. None if letter generation failed.",
+    )

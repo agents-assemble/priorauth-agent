@@ -48,7 +48,7 @@ A2A URL.
 | Variable | Purpose |
 |----------|---------|
 | `GOOGLE_API_KEY` | [Google AI Studio](https://aistudio.google.com/) — Gemini. |
-| `GEMINI_MODEL` | e.g. `gemini-3.1-flash-lite-preview` (see `.env.example`). |
+| `GEMINI_MODEL` | e.g. `gemini-2.5-flash-lite` (see `.env.example`). |
 | `AGENT_API_KEY` | Random string; same value must be configured in PO for the **external agent** (`X-API-Key`). Generate: `python -c "import secrets; print(secrets.token_urlsafe(32))"`. |
 | `AGENT_PUBLIC_URL` | **https base only** of the **A2A** tunnel (port **8001**). No trailing path — **never** use `/mcp` here (that path is only for the MCP server on :8000; putting it on the agent URL makes PO POST JSON-RPC to `/mcp` on :8001 → 404). After you change it, **restart** the A2A process so the agent card URL updates. |
 | `MCP_SERVER_URL` | **Full** MCP JSON-RPC URL: `https://<mcp-tunnel-host>/mcp` → your **:8000**. Must differ from the A2A public host. On one machine, set this to your **MCP** tunnel, not `localhost`, when PO in the cloud must call you. |
