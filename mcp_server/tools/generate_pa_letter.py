@@ -75,13 +75,13 @@ def _enforce_sections(
 
 def _render_markdown(letter: PALetter) -> str:
     """Render a canonical markdown letter from structured sections."""
-    lines: list[str] = [f"# {letter.subject_line}", ""]
+    lines: list[str] = [f"**{letter.subject_line}**", ""]
     if letter.urgent_banner:
         lines += [f"> **URGENT**: {letter.urgent_banner}", ""]
     for sec in letter.sections:
-        lines += [f"## {sec.heading}", "", sec.body, ""]
+        lines += [f"### {sec.heading}", "", sec.body, ""]
     if letter.needs_info_checklist:
-        lines += ["## Action Items", ""]
+        lines += ["### Action Items", ""]
         for item in letter.needs_info_checklist:
             lines.append(f"- {item}")
         lines.append("")
@@ -93,18 +93,18 @@ def _render_html(letter: PALetter) -> str:
     parts: list[str] = [
         "<!DOCTYPE html>",
         "<html><head><meta charset='utf-8'></head><body>",
-        f"<h1>{html.escape(letter.subject_line)}</h1>",
+        f"<p><strong>{html.escape(letter.subject_line)}</strong></p>",
     ]
     if letter.urgent_banner:
         parts.append(
             f"<blockquote><strong>URGENT</strong>: {html.escape(letter.urgent_banner)}</blockquote>"
         )
     for sec in letter.sections:
-        parts.append(f"<h2>{html.escape(sec.heading)}</h2>")
+        parts.append(f"<h3>{html.escape(sec.heading)}</h3>")
         escaped_body = html.escape(sec.body).replace("\n", "<br>")
         parts.append(f"<p>{escaped_body}</p>")
     if letter.needs_info_checklist:
-        parts.append("<h2>Action Items</h2><ul>")
+        parts.append("<h3>Action Items</h3><ul>")
         for item in letter.needs_info_checklist:
             parts.append(f"<li>{html.escape(item)}</li>")
         parts.append("</ul>")

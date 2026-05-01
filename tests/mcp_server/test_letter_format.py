@@ -102,10 +102,10 @@ class TestRenderMarkdown:
         )
         letter = _make_letter(sections)
         md = _render_markdown(letter)
-        assert md.startswith("# PA Request")
-        assert "## Request" in md
+        assert md.startswith("**PA Request")
+        assert "### Request" in md
         assert "Lumbar MRI requested." in md
-        assert "## Patient Information" in md
+        assert "### Patient Information" in md
 
     def test_urgent_banner_rendered(self) -> None:
         sections = _enforce_sections([], Decision.APPROVE)
@@ -121,7 +121,7 @@ class TestRenderMarkdown:
             needs_info_checklist=["Document PT sessions", "Provide imaging history"],
         )
         md = _render_markdown(letter)
-        assert "## Action Items" in md
+        assert "### Action Items" in md
         assert "- Document PT sessions" in md
         assert "- Provide imaging history" in md
 
@@ -134,8 +134,8 @@ class TestRenderHtml:
         )
         letter = _make_letter(sections)
         h = _render_html(letter)
-        assert "<h1>" in h
-        assert "<h2>Request</h2>" in h
+        assert "<strong>" in h
+        assert "<h3>Request</h3>" in h
         assert "Lumbar MRI requested." in h
         assert "</body></html>" in h
 
