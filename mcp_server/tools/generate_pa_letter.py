@@ -162,7 +162,7 @@ async def _gemini_generate_letter(
     criteria: CriteriaResult,
     clinician_note: str | None,
 ) -> PALetter:
-    model_name = os.environ.get("GEMINI_MODEL", "gemini-2.5-flash-lite")
+    model_name = os.environ.get("GEMINI_MODEL", "gemini-2.0-flash")
     genai.configure(api_key=os.environ.get("GOOGLE_API_KEY", ""))  # type: ignore[attr-defined]
 
     system_prompt = _load_system_prompt()

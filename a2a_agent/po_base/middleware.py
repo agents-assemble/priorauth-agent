@@ -315,6 +315,23 @@ class ApiKeyMiddleware(BaseHTTPMiddleware):
                         clean_artifact = {k: v for k, v in artifact.items() if k != "parts"}
                         clean_artifact["parts"] = clean_parts
                         clean_artifacts.append(clean_artifact)
+
+                    # Inject a user-visible error message when the task
+                    # failed with no artifacts (e.g. Gemini 429 rate limit).
+                    mapped_state = task.get("status", {}).get("state", "")
+                    if mapped_state == "TASK_STATE_FAILED" and not clean_artifacts:
+                        error_msg = status.get("message") or (
+                            "The prior authorization service is temporarily "
+                            "unavailable (LLM rate limit exceeded). "
+                            "Please try again in a few minutes."
+                        )
+                        clean_artifacts = [{"parts": [{"text": f"Error: {error_msg}"}]}]
+                        logger.info(
+                            "injected_error_artifact task_id=%s msg=%s",
+                            task.get("id"),
+                            error_msg[:100],
+                        )
+
                     task["artifacts"] = clean_artifacts
 
                     # Keep JSON-RPC envelope; nest task under "task" key in result
