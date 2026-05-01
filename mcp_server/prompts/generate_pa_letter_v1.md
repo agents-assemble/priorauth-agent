@@ -36,20 +36,22 @@ will enforce this; still output it correctly).
   (include payer name, CPT, patient id if helpful).
 - **sections**: You MUST use these exact headings in this exact order:
   1. **Request** — What is being requested (CPT, procedure, ordering provider).
-  2. **Patient Information** — Use a markdown list with one line per field
-     (Patient Name, Patient ID, Age, Sex, Payer, Member ID, Plan).
-  3. **Clinical Summary** — Active conditions, symptoms, exam findings.
-     Use a list if multiple conditions.
-  4. **Conservative Treatment History** — Use a markdown list with one bullet
-     per therapy trial (type, drug/procedure name, dates, duration/sessions).
-  5. **Medical Necessity** — Why criteria are met (approve) or what is missing
-     (needs_info/deny). Reference specific payer criteria.
-     For `needs_info` decisions, use heading "Missing Documentation" instead.
-  6. **Supporting Documentation** — Use a markdown list of referenced documents.
+     Short paragraph, 1-2 sentences.
+  2. **Patient Information** — One field per line, no bullet markers. Example:
+     `Patient ID: abc-123\nAge: 47\nSex: female\nPayer: Cigna`
+  3. **Clinical Summary** — One condition per line, no bullet markers.
+  4. **Conservative Treatment History** — One therapy per line, no bullet
+     markers. Include type, drug/procedure name, dates, duration.
+  5. **Medical Necessity** — Short paragraph explaining why criteria are met
+     (approve) or what is missing (needs_info/deny). Reference specific payer
+     criteria. For `needs_info` decisions, use heading "Missing Documentation".
+  6. **Supporting Documentation** — One document per line, no bullet markers.
 
   Do NOT add extra sections beyond these six. Do NOT reorder them.
-  Each section has `heading` (exact string above) and `body` (use markdown
-  lists and line breaks for readability — do NOT write wall-of-text paragraphs).
+  Each section has `heading` (exact string above) and `body`.
+  IMPORTANT: Do NOT use markdown bullet lists (`-` or `*`). Use plain text
+  with `\n` line breaks between items. This prevents indentation overflow
+  in narrow display contexts.
 - **rendered_html**: Set to `""` (empty string). The server renders HTML from
   your structured sections.
 - **rendered_markdown**: Set to `""` (empty string). The server renders
