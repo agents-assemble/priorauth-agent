@@ -25,7 +25,7 @@ def _make_letter(
         patient_id="test-patient",
         payer_id="cigna",
         service_cpt="72148",
-        subject_line="PA Request — Lumbar MRI (72148)",
+        subject_line="Prior Authorization Readiness Review",
         sections=sections,
         rendered_html="",
         rendered_markdown="",
@@ -35,85 +35,87 @@ def _make_letter(
     )
 
 
+_V2_CANONICAL_HEADINGS = [
+    "Summary",
+    "Records Reviewed",
+    "Criteria Trace",
+    "Policy Reference",
+    "Authorization Basis",
+]
+
+
 class TestEnforceSections:
     def test_canonical_order_preserved(self) -> None:
         scrambled = [
-            LetterSection(heading="Supporting Documentation", body="Docs."),
-            LetterSection(heading="Request", body="MRI requested."),
-            LetterSection(heading="Clinical Summary", body="LBP."),
-            LetterSection(heading="Patient Information", body="47yo F."),
-            LetterSection(heading="Medical Necessity", body="Criteria met."),
-            LetterSection(heading="Conservative Treatment History", body="PT x8."),
+            LetterSection(heading="Policy Reference", body="Cigna CPB."),
+            LetterSection(heading="Summary", body="Request meets criteria."),
+            LetterSection(heading="Criteria Trace", body="All met."),
+            LetterSection(heading="Records Reviewed", body="Note dated 2026-04-15."),
+            LetterSection(heading="Authorization Basis", body="Criteria met."),
         ]
         result = _enforce_sections(scrambled, Decision.APPROVE)
         headings = [s.heading for s in result]
-        assert headings == [
-            "Request",
-            "Patient Information",
-            "Clinical Summary",
-            "Conservative Treatment History",
-            "Medical Necessity",
-            "Supporting Documentation",
-        ]
+        assert headings == _V2_CANONICAL_HEADINGS
 
     def test_missing_sections_get_empty_body(self) -> None:
         partial = [
-            LetterSection(heading="Request", body="MRI requested."),
+            LetterSection(heading="Summary", body="Request meets criteria."),
         ]
         result = _enforce_sections(partial, Decision.APPROVE)
-        assert len(result) == 6
-        assert result[0].body == "MRI requested."
+        assert len(result) == 5
+        assert result[0].body == "Request meets criteria."
         assert result[1].body == ""
 
-    def test_needs_info_swaps_medical_necessity_heading(self) -> None:
+    def test_needs_info_swaps_authorization_basis_heading(self) -> None:
         sections = [
-            LetterSection(heading="Medical Necessity", body="Insufficient evidence."),
+            LetterSection(heading="Authorization Basis", body="Insufficient evidence."),
         ]
         result = _enforce_sections(sections, Decision.NEEDS_INFO)
         headings = [s.heading for s in result]
-        assert "Missing Documentation" in headings
-        assert "Medical Necessity" not in headings
+        assert "Recommended Next Steps" in headings
+        assert "Authorization Basis" not in headings
 
     def test_extra_sections_are_dropped(self) -> None:
         sections = [
-            LetterSection(heading="Request", body="MRI."),
+            LetterSection(heading="Summary", body="OK."),
             LetterSection(heading="Bonus Section", body="Should be dropped."),
         ]
         result = _enforce_sections(sections, Decision.APPROVE)
-        assert len(result) == 6
+        assert len(result) == 5
         headings = [s.heading for s in result]
         assert "Bonus Section" not in headings
 
     def test_case_insensitive_matching(self) -> None:
         sections = [
-            LetterSection(heading="request", body="MRI requested."),
-            LetterSection(heading="CLINICAL SUMMARY", body="LBP."),
+            LetterSection(heading="summary", body="Request meets criteria."),
+            LetterSection(heading="CRITERIA TRACE", body="All met."),
         ]
         result = _enforce_sections(sections, Decision.APPROVE)
-        assert result[0].body == "MRI requested."
-        assert result[2].body == "LBP."
+        assert result[0].body == "Request meets criteria."
+        assert result[2].body == "All met."
 
 
 class TestRenderMarkdown:
     def test_basic_structure(self) -> None:
         sections = _enforce_sections(
-            [LetterSection(heading="Request", body="Lumbar MRI requested.")],
+            [LetterSection(heading="Summary", body="Criteria met.")],
             Decision.APPROVE,
         )
         letter = _make_letter(sections)
         md = _render_markdown(letter)
-        assert md.startswith("**PA Request")
-        assert "### Request" in md
-        assert "Lumbar MRI requested." in md
-        assert "### Patient Information" in md
+        assert md.startswith("Prior Authorization Readiness Review")
+        assert "Readiness Decision: APPROVED" in md
+        assert "Summary:" in md
+        assert "Criteria met." in md
+        assert "Human Review Note:" in md
 
     def test_urgent_banner_rendered(self) -> None:
         sections = _enforce_sections([], Decision.APPROVE)
         letter = _make_letter(sections, urgent_banner="Cauda equina suspected")
         md = _render_markdown(letter)
-        assert "> **URGENT**: Cauda equina suspected" in md
+        assert "URGENT: Cauda equina suspected" in md
 
-    def test_needs_info_checklist_rendered(self) -> None:
+    def test_needs_info_checklist_not_in_markdown(self) -> None:
         sections = _enforce_sections([], Decision.NEEDS_INFO)
         letter = _make_letter(
             sections,
@@ -121,27 +123,35 @@ class TestRenderMarkdown:
             needs_info_checklist=["Document PT sessions", "Provide imaging history"],
         )
         md = _render_markdown(letter)
-        assert "### Action Items" in md
-        assert "- Document PT sessions" in md
-        assert "- Provide imaging history" in md
+        assert "Readiness Decision: NEEDS ADDITIONAL INFORMATION" in md
+        assert "Recommended Next Steps:" in md
+
+    def test_header_block_contains_patient_metadata(self) -> None:
+        sections = _enforce_sections([], Decision.APPROVE)
+        letter = _make_letter(sections)
+        md = _render_markdown(letter)
+        assert "Procedure: Lumbar spine MRI without contrast" in md
+        assert "CPT: 72148" in md
+        assert "Payer: cigna" in md
+        assert "Patient ID: test-patient" in md
 
 
 class TestRenderHtml:
     def test_basic_structure(self) -> None:
         sections = _enforce_sections(
-            [LetterSection(heading="Request", body="Lumbar MRI requested.")],
+            [LetterSection(heading="Summary", body="Criteria met.")],
             Decision.APPROVE,
         )
         letter = _make_letter(sections)
         h = _render_html(letter)
         assert "<strong>" in h
-        assert "<h3>Request</h3>" in h
-        assert "Lumbar MRI requested." in h
+        assert "<h3>Summary</h3>" in h
+        assert "Criteria met." in h
         assert "</body></html>" in h
 
     def test_html_escaping(self) -> None:
         sections = _enforce_sections(
-            [LetterSection(heading="Request", body="Test <script>alert(1)</script>")],
+            [LetterSection(heading="Summary", body="Test <script>alert(1)</script>")],
             Decision.APPROVE,
         )
         letter = _make_letter(sections)
