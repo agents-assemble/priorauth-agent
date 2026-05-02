@@ -214,9 +214,7 @@ async def _fetch_from_fhir(
             used_loinc_fallback = False
             if not docs:
                 logger.info("documentreference_loinc_fallback patient=%s", patient_id)
-                docs = await _safe_search(
-                    client, "DocumentReference", {"patient": patient_id}
-                )
+                docs = await _safe_search(client, "DocumentReference", {"patient": patient_id})
                 used_loinc_fallback = True
 
             # Try extracting text; use lenient mode (skip LOINC type filter)
@@ -303,9 +301,7 @@ async def _fetch_docs_via_url(
     patient_id: str,
 ) -> list[tuple[str, str]]:
     """Fetch document content from attachment URLs when inline data is absent."""
-    logger.info(
-        "documentreference_url_fallback patient=%s docs=%d", patient_id, len(docs)
-    )
+    logger.info("documentreference_url_fallback patient=%s docs=%d", patient_id, len(docs))
     out: list[tuple[str, str]] = []
     for doc_res in docs:
         for entry in doc_res.get("content", []):
@@ -326,9 +322,7 @@ async def _fetch_docs_via_url(
                         len(text),
                     )
             except Exception:
-                logger.warning(
-                    "documentreference_url_fetch_failed url=%s", url[:120]
-                )
+                logger.warning("documentreference_url_fetch_failed url=%s", url[:120])
     out.sort(key=lambda p: p[0], reverse=True)
     return out
 

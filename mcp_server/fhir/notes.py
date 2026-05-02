@@ -103,10 +103,7 @@ def extract_document_text(
                 "content_entries=%d has_url=%s",
                 i,
                 len(res.get("content", [])),
-                any(
-                    e.get("attachment", {}).get("url")
-                    for e in res.get("content", [])
-                ),
+                any(e.get("attachment", {}).get("url") for e in res.get("content", [])),
             )
             continue
         when = res.get("date") or res.get("created") or ""

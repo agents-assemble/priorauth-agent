@@ -197,7 +197,7 @@ class PALetter(BaseModel):
     )
     source_criteria_version: str = Field(
         default="",
-        description="Version tag of the payer criteria JSON used, e.g. 'cigna_lumbar_mri.v1'."
+        description="Version tag of the payer criteria JSON used, e.g. 'cigna_lumbar_mri.v1'.",
     )
 
 

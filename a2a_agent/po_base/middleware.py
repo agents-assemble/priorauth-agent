@@ -349,7 +349,7 @@ class ApiKeyMiddleware(BaseHTTPMiddleware):
                     history = result.get("history", [])
                     text_parts = []
                     for entry in history:
-                        for part in (entry.get("parts") or []):
+                        for part in entry.get("parts") or []:
                             if "text" in part:
                                 text_parts.append(part["text"])
 
