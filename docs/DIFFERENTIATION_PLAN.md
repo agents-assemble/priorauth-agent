@@ -42,7 +42,7 @@ todos:
     content: "Person B: Add 15-second demo intro: 'Most PA agents generate packets. PriorAuth Preflight decides whether a lumbar MRI packet should be generated at all, then fixes missing documentation first.' Prevents judges from grouping us with the PA crowd."
     status: pending
   - id: pair-flyio
-    content: "PAIR: Fly.io deploy both services + swap ngrok URLs in PO workspace"
+    content: "PAIR: Re-deploy both Fly.io services after features merge (fly deploy only — infra already on main via PR #25). Confirm PO workspace URLs point to Fly hostnames."
     status: pending
 isProject: false
 ---
@@ -99,8 +99,8 @@ flowchart TD
         B5 --> B6
     end
     
-    A5 --> Deploy["PAIR: Fly.io deploy + PO URL swap"]
-    B4 --> Deploy
+    A5 --> Deploy["PAIR: fly deploy both services\n(infra already on main via PR #25)"]
+    B6 --> Deploy
 ```
 
 **Why this split works:**
