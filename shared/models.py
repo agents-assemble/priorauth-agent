@@ -262,8 +262,7 @@ class GapFixNote(BaseModel):
     fields_to_complete: list[str] = Field(
         default_factory=list,
         description=(
-            "Each [placeholder] from template_text with a short "
-            "explanation of what to fill."
+            "Each [placeholder] from template_text with a short explanation of what to fill."
         ),
     )
     rendered_markdown: str = Field(
