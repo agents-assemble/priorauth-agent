@@ -19,6 +19,7 @@ from typing import Any
 
 import pytest
 from mcp_server.fhir.extractors import (
+    detect_payer_from_text,
     detect_redflags_from_conditions,
     extract_conditions,
     extract_coverage,
@@ -387,3 +388,42 @@ def test_redflag_prefix_match_handles_unenumerated_z85_subcodes() -> None:
         [Condition(code="Z85.79", display="Personal hx of other lymphoid neoplasm")]
     )
     assert {c.label for c in candidates} == {"history_of_cancer"}
+
+
+# ---------------------------------------------------------------------------
+# detect_payer_from_text — notes-based payer fallback
+# ---------------------------------------------------------------------------
+
+
+@pytest.mark.parametrize(
+    "text, expected_id",
+    [
+        ("Patient covered under Cigna HealthCare plan.", "cigna"),
+        ("Insurance: CIGNA PPO", "cigna"),
+        ("Aetna Open Choice PPO", "aetna"),
+        ("Covered by Evernorth Behavioral Health", "cigna"),
+        ("eviCore prior auth guidelines apply", "cigna"),
+    ],
+)
+def test_detect_payer_from_text_matches(text: str, expected_id: str) -> None:
+    name, payer_id = detect_payer_from_text(text)
+    assert payer_id == expected_id
+    assert name != ""
+
+
+def test_detect_payer_from_text_no_match() -> None:
+    name, payer_id = detect_payer_from_text(
+        "Patient presents with low back pain. No insurance information in note."
+    )
+    assert payer_id == ""
+    assert name == ""
+
+
+def test_detect_payer_from_text_empty_string() -> None:
+    assert detect_payer_from_text("") == ("", "")
+
+
+def test_detect_payer_from_text_first_match_wins() -> None:
+    """When note mentions both Cigna and Aetna, Cigna comes first in _PAYER_ROUTING."""
+    _, payer_id = detect_payer_from_text("Primary: Cigna, Secondary: Aetna")
+    assert payer_id == "cigna"

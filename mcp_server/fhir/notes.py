@@ -60,32 +60,58 @@ _DEFAULT_EXCERPT_MAX_CHARS = 3000  # ~3 KB - the upper bound the PatientContext
 # ---------------------------------------------------------------------------
 
 
-def extract_document_text(resources: list[dict[str, Any]]) -> list[tuple[str, str]]:
+def extract_document_text(
+    resources: list[dict[str, Any]],
+    *,
+    lenient: bool = False,
+) -> list[tuple[str, str]]:
     """Decode inline `DocumentReference.content` attachments to (date, text) pairs.
 
-    Filters to progress-note LOINC types (the lumbar-PA workflow only cares
-    about clinician-authored encounters; lab reports and discharge summaries
-    are out of scope for v1). Sorted descending by `DocumentReference.date`
-    so the caller can take the most recent without re-sorting.
+    When *lenient* is False (default), filters to progress-note LOINC types.
+    When *lenient* is True (used by the fallback search path), accepts any
+    text document regardless of LOINC type — the caller already exhausted
+    the typed search and is taking what it can get.
 
-    Skips - rather than crashes on - resources missing inline `data` (i.e.
-    only an external `url`). The v1 tool will not follow external URLs
-    because the FHIR token's scope may not extend to whatever blob store
-    the URL points to (S3, Azure Blob, etc.); chasing those refs is a
-    Week-3 hardening task once we know the real shape of PO workspace
-    DocumentReference attachments.
+    Sorted descending by ``DocumentReference.date`` so the caller can take
+    the most recent without re-sorting.
     """
+    logger.info(
+        "extract_document_text resources=%d lenient=%s",
+        len(resources),
+        lenient,
+    )
     out: list[tuple[str, str]] = []
-    for res in resources:
-        if not _is_progress_note(res):
+    for i, res in enumerate(resources):
+        if not lenient and not _is_progress_note(res):
+            logger.debug(
+                "extract_document_text skip[%d] reason=not_progress_note type=%s",
+                i,
+                res.get("type"),
+            )
             continue
         if res.get("status") not in (None, "current"):
+            logger.debug(
+                "extract_document_text skip[%d] reason=status status=%s",
+                i,
+                res.get("status"),
+            )
             continue
         text = _decode_inline_content(res)
         if not text:
+            logger.info(
+                "extract_document_text skip[%d] reason=no_decodable_content "
+                "content_entries=%d has_url=%s",
+                i,
+                len(res.get("content", [])),
+                any(
+                    e.get("attachment", {}).get("url")
+                    for e in res.get("content", [])
+                ),
+            )
             continue
         when = res.get("date") or res.get("created") or ""
         out.append((str(when)[:10], text))
+    logger.info("extract_document_text extracted=%d", len(out))
     out.sort(key=lambda pair: pair[0], reverse=True)
     return out
 

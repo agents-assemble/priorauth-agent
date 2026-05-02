@@ -17,11 +17,11 @@ together.
 
 from __future__ import annotations
 
-# Default: gemini-2.0-flash (GA, 1500 RPD free tier).
-# Switched from gemini-2.5-flash-lite which had only 20 RPD on free tier,
-# exhausted after ~5 PA evaluations per day.
+# Default: gemini-2.5-flash-lite (free tier, 20 RPD).
+# gemini-2.0-flash has 0 RPD (removed from free tier).
+# gemini-2.5-flash also only has 20 RPD despite documentation claims.
 # Per AGENTS.md, never hardcode the model name at call sites;
 # always flow through this constant.
-_DEFAULT_MODEL = "gemini-2.0-flash"
+_DEFAULT_MODEL = "gemini-2.5-flash-lite"
 
 __all__ = ["_DEFAULT_MODEL"]

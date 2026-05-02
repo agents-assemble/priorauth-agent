@@ -196,6 +196,7 @@ class PALetter(BaseModel):
         description="Populated when red_flag_fast_track is True on the source CriteriaResult.",
     )
     source_criteria_version: str = Field(
+        default="",
         description="Version tag of the payer criteria JSON used, e.g. 'cigna_lumbar_mri.v1'."
     )
 

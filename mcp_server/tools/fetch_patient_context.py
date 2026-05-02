@@ -58,6 +58,7 @@ from mcp_server.fhir.context import (
     get_patient_id_if_context_exists,
 )
 from mcp_server.fhir.extractors import (
+    detect_payer_from_text,
     detect_redflags_from_conditions,
     extract_conditions,
     extract_coverage,
@@ -197,23 +198,38 @@ async def _fetch_from_fhir(
                 _safe_search(
                     client,
                     "DocumentReference",
-                    # Filter to progress notes server-side; some EHRs return
-                    # hundreds of DocumentReferences (lab reports, imaging
-                    # reports, discharge summaries) per patient and the
-                    # bandwidth + extraction cost otherwise dominates. The
-                    # fallback search (no type filter) runs only if zero
-                    # progress notes come back.
                     {
                         "patient": patient_id,
                         "type": "http://loinc.org|11506-3",
                     },
                 ),
             )
+
+            patient_res, conditions, meds, procs, srs, coverages, reports, docs = results
+
+            # Fallback: Synthea/PO documents often lack the progress-note LOINC
+            # code, so the typed search returns empty.  Re-search without the
+            # type filter so we still get clinical notes for excerpt + payer
+            # fallback.
+            used_loinc_fallback = False
+            if not docs:
+                logger.info("documentreference_loinc_fallback patient=%s", patient_id)
+                docs = await _safe_search(
+                    client, "DocumentReference", {"patient": patient_id}
+                )
+                used_loinc_fallback = True
+
+            # Try extracting text; use lenient mode (skip LOINC type filter)
+            # when documents came from the unfiltered fallback search.
+            notes = extract_document_text(docs, lenient=used_loinc_fallback)  # type: ignore[arg-type]
+
+            # If notes are still empty but documents exist, their content may
+            # be stored as a URL reference rather than inline base64.
+            if not notes and docs:
+                notes = await _fetch_docs_via_url(client, docs, patient_id)
     finally:
         if owns_http:
             await http.aclose()
-
-    patient_res, conditions, meds, procs, srs, coverages, reports, docs = results
 
     if not isinstance(patient_res, dict):
         raise FhirContextError(f"Patient/{patient_id} not found on FHIR server")
@@ -223,13 +239,29 @@ async def _fetch_from_fhir(
         *extract_medication_trials(meds),  # type: ignore[arg-type]
         *extract_procedure_trials(procs),  # type: ignore[arg-type]
     ]
-    notes = extract_document_text(docs)  # type: ignore[arg-type]
     most_recent_note_text = notes[0][1] if notes else ""
     excerpt = compress_excerpt(most_recent_note_text) if most_recent_note_text else ""
     redflag_candidates = [
         *detect_redflags_from_conditions(active_conditions),
         *detect_redflags_from_text(most_recent_note_text),
     ]
+    coverage = extract_coverage(coverages)  # type: ignore[arg-type]
+
+    if not coverage.payer_id and most_recent_note_text:
+        matched_name, matched_id = detect_payer_from_text(most_recent_note_text)
+        if matched_id:
+            coverage = Coverage(
+                payer_id=matched_id,
+                payer_name=matched_name,
+                member_id=coverage.member_id,
+                plan_name=coverage.plan_name,
+            )
+            logger.info(
+                "payer_from_notes_fallback payer_id=%s matched_name=%s",
+                matched_id,
+                matched_name,
+            )
+
     return PatientContext(
         demographics=extract_demographics(patient_res),
         active_conditions=active_conditions,
@@ -237,7 +269,7 @@ async def _fetch_from_fhir(
         prior_imaging=extract_prior_imaging(reports),  # type: ignore[arg-type]
         red_flag_candidates=_dedupe_redflags(redflag_candidates),
         service_request=extract_service_request(srs, cpt_code=service_code),  # type: ignore[arg-type]
-        coverage=extract_coverage(coverages),  # type: ignore[arg-type]
+        coverage=coverage,
         clinical_notes_excerpt=excerpt,
     )
 
@@ -262,6 +294,42 @@ def _dedupe_redflags(candidates: list[RedFlagCandidate]) -> list[RedFlagCandidat
             continue
         seen.add(key)
         out.append(c)
+    return out
+
+
+async def _fetch_docs_via_url(
+    client: FhirClient,
+    docs: list[dict[str, Any]],
+    patient_id: str,
+) -> list[tuple[str, str]]:
+    """Fetch document content from attachment URLs when inline data is absent."""
+    logger.info(
+        "documentreference_url_fallback patient=%s docs=%d", patient_id, len(docs)
+    )
+    out: list[tuple[str, str]] = []
+    for doc_res in docs:
+        for entry in doc_res.get("content", []):
+            att = entry.get("attachment", {})
+            url = att.get("url")
+            ctype = str(att.get("contentType", "")).lower()
+            if not url or not (ctype.startswith("text/") or ctype == ""):
+                continue
+            try:
+                text_bytes = await _fetch_binary(client, url)
+                text = text_bytes.decode("utf-8", errors="replace")
+                if text.strip():
+                    when = doc_res.get("date") or doc_res.get("created") or ""
+                    out.append((str(when)[:10], text))
+                    logger.info(
+                        "documentreference_url_fetched url=%s len=%d",
+                        url[:120],
+                        len(text),
+                    )
+            except Exception:
+                logger.warning(
+                    "documentreference_url_fetch_failed url=%s", url[:120]
+                )
+    out.sort(key=lambda p: p[0], reverse=True)
     return out
 
 
@@ -295,3 +363,14 @@ async def _safe_search(
             exc.response.text[:200],
         )
         return []
+
+
+async def _fetch_binary(client: FhirClient, url: str) -> bytes:
+    """Fetch raw bytes from a FHIR Binary/attachment URL using the client's auth."""
+    assert client._http is not None
+    headers: dict[str, str] = {}
+    if client.token:
+        headers["Authorization"] = f"Bearer {client.token}"
+    resp = await client._http.get(url, headers=headers)
+    resp.raise_for_status()
+    return resp.content
