@@ -21,7 +21,7 @@ todos:
     content: "Person A: Create 4th demo patient bundle (chart-procedure mismatch) for DO_NOT_SUBMIT flow"
     status: pending
   - id: a-golden-tests
-    content: "Person A: Golden tests for DO_NOT_SUBMIT, gap-fix-note, evidence snippets, and audit metadata"
+    content: "Person A: Golden tests for DO_NOT_SUBMIT, gap-fix-note, evidence snippets, audit metadata. MUST verify Patient B (M54.50 + NSAID) still routes to NEEDS_INFO (not DO_NOT_SUBMIT) after chart-mismatch pre-check."
     status: pending
   - id: b-rebrand
     content: "Person B: Rename agent to 'PriorAuth Preflight - Lumbar MRI' in agent card, instructions, app.py, README"
@@ -32,8 +32,14 @@ todos:
   - id: b-orchestration-dns
     content: "Person B: Update root orchestrator instruction to mention DO_NOT_SUBMIT + gap-fix in handoff logic"
     status: pending
+  - id: b-artifact-format
+    content: "Person B: Format PO artifact output with verdict banner, criteria trace table with source snippets, gap-fix template inline, and human-review note. Judges only see what is in the artifact — internal model fields are invisible without this."
+    status: pending
   - id: b-storyboard
     content: "Person B: Revise demo storyboard to lead with needs-info + gap-fix; draft Devpost copy"
+    status: pending
+  - id: b-demo-differentiation-line
+    content: "Person B: Add 15-second demo intro: 'Most PA agents generate packets. PriorAuth Preflight decides whether a lumbar MRI packet should be generated at all, then fixes missing documentation first.' Prevents judges from grouping us with the PA crowd."
     status: pending
   - id: pair-flyio
     content: "PAIR: Fly.io deploy both services + swap ngrok URLs in PO workspace"
@@ -83,10 +89,14 @@ flowchart TD
         B1["Rebrand to Preflight\nagent card + instructions + README"]
         B2["Wire gap-fix into A2A\nsub-agent / MCP toolset"]
         B3["Update orchestrator\nDO_NOT_SUBMIT + gap-fix handoffs"]
-        B4["Storyboard + Devpost draft"]
+        B4["Artifact format for PO\nverdict banner + trace table\n+ snippets + audit footer"]
+        B5["Storyboard + Devpost draft"]
+        B6["Demo differentiation line\n15-sec positioning hook"]
         B1 --> B3
         B2 --> B3
         B3 --> B4
+        B4 --> B5
+        B5 --> B6
     end
     
     A5 --> Deploy["PAIR: Fly.io deploy + PO URL swap"]
@@ -159,6 +169,7 @@ All additive (new optional fields + new enum value + new model). Existing consum
 
 - 4th patient: sore-throat chart (Condition J02.0 streptococcal pharyngitis) + a ServiceRequest for CPT 72148 lumbar MRI. Coverage: Cigna.
 - Golden tests: `test_match_payer_criteria` for DO_NOT_SUBMIT, `test_generate_gap_fix_note`, evidence snippets present on existing patient tests, audit fields populated.
+- **Critical verification:** Patient B (M54.50 + NSAID trial, missing PT) must still route to `NEEDS_INFO` (not `DO_NOT_SUBMIT`) after the chart-mismatch pre-check. M54 is in `covered_icd_patterns` so it should pass, but pin this in a named test assertion.
 
 **Effort:** ~100 lines bundle + tests, half a day.
 
@@ -197,7 +208,22 @@ All additive (new optional fields + new enum value + new model). Existing consum
 
 **Effort:** ~30 lines, 1-2 hours.
 
-### B4. Storyboard + Devpost Draft
+### B4. Artifact Format for PO Display (CRITICAL)
+
+**Why this matters:** Judges see **only** what appears in the PO chat artifact. `CriterionCheck.source_document` and `snippet` are internal JSON fields — invisible unless the A2A response artifact renders them. Without this task, all of Person A's evidence-snippet and audit work is invisible to judges.
+
+**Files:** [`a2a_agent/sub_agents/criteria_evaluator.py`](a2a_agent/sub_agents/criteria_evaluator.py), [`a2a_agent/agent.py`](a2a_agent/agent.py)
+
+- Format the response artifact to include:
+  - **Verdict banner** (APPROVE / NEEDS_INFO / DO_NOT_SUBMIT / RED FLAG with appropriate urgency)
+  - **Criteria trace table** — each policy clause with status (met/missing), evidence snippet, and source document reference
+  - **Gap-fix template** inline when decision is `needs_info` or `do_not_submit`
+  - **Audit footer** — "Pending human review. Policy: aetna_lumbar_mri.v2026. Evaluated: [timestamp]."
+- This can be done in the criteria_evaluator sub-agent instruction or in a post-processing step that formats the structured JSON into readable text
+
+**Effort:** ~60-80 lines of instruction/formatting, 2-3 hours.
+
+### B5. Storyboard + Devpost Draft
 
 **Files:** [`demo/`](demo/) storyboard doc, `SUBMISSION.md`
 
@@ -206,6 +232,15 @@ All additive (new optional fields + new enum value + new model). Existing consum
 - Draft Devpost copy with the positioning: "We prevent avoidable denials and tell clinicians exactly what to fix"
 
 **Effort:** 2-3 hours writing.
+
+### B6. Demo Differentiation Line
+
+**Why:** Without an explicit positioning statement, judges mentally group us with "another PA packet generator." This 15-second hook in the demo intro prevents that.
+
+- Add to demo script opening: *"Most PA agents generate packets. PriorAuth Preflight decides whether a lumbar MRI packet should be generated at all, then fixes missing documentation first."*
+- Reinforce in Devpost intro paragraph
+
+**Effort:** 15 minutes (but high leverage).
 
 ---
 
@@ -222,8 +257,8 @@ All additive (new optional fields + new enum value + new model). Existing consum
 
 - **May 2 (today):** Plan approval. Gate PR (shared/models.py). Both start tracks.
 - **May 3-4:** Person A ships A1-A4 as 1-2 PRs. Person B ships B1-B3 as 1-2 PRs.
-- **May 5:** Person A ships A5 (Patient D + tests). Person B ships B4 (storyboard draft).
-- **May 6:** PAIR: Fly.io deploy + PO URL swap + integration smoke on all 4 patients.
+- **May 5:** Person A ships A5 (Patient D + tests). Person B ships B4 (artifact format) + B5 (storyboard draft).
+- **May 6:** PAIR: Fly.io deploy + PO URL swap + integration smoke on all 4 patients. B6 (differentiation line) finalized.
 - **May 7-8:** Demo video + Devpost.
 - **May 9:** Internal ship date (48-hr buffer).
 - **May 11:** Hackathon deadline.
