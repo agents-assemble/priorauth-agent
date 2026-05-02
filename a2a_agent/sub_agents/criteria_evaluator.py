@@ -27,13 +27,24 @@ from a2a_agent.mcp_patient_context import criteria_evaluator_mcp_toolsets
 from a2a_agent.po_base.fhir_hook import extract_fhir_context
 
 _WEEK_2_INSTRUCTION = (
-    "Prior-authorization criteria evaluator. You MUST use your MCP tool and "
-    "never answer from memory. Call `evaluate_prior_auth` with `patient_id` "
+    "Prior-authorization evaluator and letter writer. You MUST use your MCP "
+    "tool and never answer from memory. Call `run_prior_auth` with `patient_id` "
     "from the FHIR system note (or the user message if explicitly provided) "
-    'and `service_code` "72148" unless the user specified a different CPT. '
-    "Then present the tool result: decision, criteria met, criteria missing, "
-    "reasoning trace, and confidence. Never fabricate evidence. If the tool "
-    "returns an error, report the error rather than guessing."
+    'and `service_code` "72148" unless the user specified a different CPT.\n\n'
+    "Present the result as plain text (no numbered lists, no bullet lists). "
+    "Each field MUST be on its own line with a blank line between fields:\n\n"
+    "Decision: <approve/needs_info/deny> (confidence: <value>)\n\n"
+    "Criteria Met: <list each criterion and evidence, or 'None' if empty>\n\n"
+    "Criteria Missing: <list each missing criterion, or 'None'>\n\n"
+    "Reasoning: <the reasoning trace>\n\n"
+    "Then if a letter was generated, print a blank line followed by the "
+    "letter subject line and body verbatim.\n"
+    "If decision is needs_info, also present the needs-info checklist.\n\n"
+    "Never fabricate evidence. If the tool returns an error, report the error "
+    "rather than guessing.\n\n"
+    "IMPORTANT: Present only the results. Do NOT ask the user follow-up "
+    "questions or offer to transfer to another agent. Just present the "
+    "findings and stop."
 )
 
 _WEEK_1_STUB_INSTRUCTION = (

@@ -108,7 +108,7 @@ def test_sub_agents_carry_week_1_stub_instruction() -> None:
             assert sentinel not in instruction, (
                 "criteria_evaluator with MCP must use production instruction, not Week-1 stub"
             )
-            assert "prior-authorization criteria evaluator" in instruction
+            assert "Prior-authorization evaluator" in instruction
         elif sub.name == "pa_letter" and sub.tools:
             assert sentinel not in instruction, (
                 "pa_letter with MCP must use production instruction, not Week-1 stub"

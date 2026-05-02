@@ -22,6 +22,7 @@ from mcp_server.tools.evaluate_prior_auth import evaluate_prior_auth
 from mcp_server.tools.fetch_patient_context import fetch_patient_context
 from mcp_server.tools.generate_pa_letter import generate_pa_letter
 from mcp_server.tools.match_payer_criteria import match_payer_criteria
+from mcp_server.tools.run_prior_auth import run_prior_auth
 
 
 def _patch_capabilities(mcp: FastMCP) -> None:
@@ -102,3 +103,15 @@ mcp.tool(
         "and match_payer_criteria (or evaluate_prior_auth for criteria)."
     ),
 )(generate_pa_letter)
+
+
+mcp.tool(
+    name="run_prior_auth",
+    description=(
+        "Run the complete prior-authorization pipeline: fetch patient context, "
+        "evaluate payer criteria, and generate a PA letter (or needs-info "
+        "checklist) in one call. Returns a PriorAuthResult containing both "
+        "the CriteriaResult and the PALetter. Prefer this over calling the "
+        "individual tools separately."
+    ),
+)(run_prior_auth)

@@ -17,10 +17,11 @@ together.
 
 from __future__ import annotations
 
-# Default: gemini-3.1-flash-lite-preview (PO Connectathon recommendation,
-# preview tier). Fallback: gemini-2.5-flash-lite if preview access is revoked
-# or rate-limited. Per AGENTS.md, never hardcode the model name at call sites;
+# Default: gemini-2.5-flash-lite (free tier, 20 RPD).
+# gemini-2.0-flash has 0 RPD (removed from free tier).
+# gemini-2.5-flash also only has 20 RPD despite documentation claims.
+# Per AGENTS.md, never hardcode the model name at call sites;
 # always flow through this constant.
-_DEFAULT_MODEL = "gemini-3.1-flash-lite-preview"
+_DEFAULT_MODEL = "gemini-2.5-flash-lite"
 
 __all__ = ["_DEFAULT_MODEL"]

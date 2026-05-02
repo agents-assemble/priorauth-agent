@@ -111,7 +111,7 @@ def main() -> int:
         )
         return 1
 
-    model_name = os.environ.get("GEMINI_MODEL", "gemini-2.5-flash").strip()
+    model_name = os.environ.get("GEMINI_MODEL", "gemini-2.5-flash-lite").strip()
 
     genai.configure(api_key=api_key)  # type: ignore[attr-defined]
     model = genai.GenerativeModel(model_name)  # type: ignore[attr-defined]

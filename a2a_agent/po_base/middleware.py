@@ -315,6 +315,23 @@ class ApiKeyMiddleware(BaseHTTPMiddleware):
                         clean_artifact = {k: v for k, v in artifact.items() if k != "parts"}
                         clean_artifact["parts"] = clean_parts
                         clean_artifacts.append(clean_artifact)
+
+                    # Inject a user-visible error message when the task
+                    # failed with no artifacts (e.g. Gemini 429 rate limit).
+                    mapped_state = task.get("status", {}).get("state", "")
+                    if mapped_state == "TASK_STATE_FAILED" and not clean_artifacts:
+                        error_msg = status.get("message") or (
+                            "The prior authorization service is temporarily "
+                            "unavailable (LLM rate limit exceeded). "
+                            "Please try again in a few minutes."
+                        )
+                        clean_artifacts = [{"parts": [{"text": f"Error: {error_msg}"}]}]
+                        logger.info(
+                            "injected_error_artifact task_id=%s msg=%s",
+                            task.get("id"),
+                            error_msg[:100],
+                        )
+
                     task["artifacts"] = clean_artifacts
 
                     # Keep JSON-RPC envelope; nest task under "task" key in result
@@ -323,6 +340,52 @@ class ApiKeyMiddleware(BaseHTTPMiddleware):
                         "response_reshaped_to_po_a2a_json task_id=%s state=%s",
                         task.get("id"),
                         task["status"]["state"],
+                    )
+
+                elif isinstance(result, dict) and "history" in result and "kind" not in result:
+                    # ADK returns a different shape on some failures: a flat
+                    # dict with contextId + history[] but no kind:"task".
+                    # Synthesise a proper PO-compatible task envelope.
+                    history = result.get("history", [])
+                    text_parts = []
+                    for entry in history:
+                        for part in entry.get("parts") or []:
+                            if "text" in part:
+                                text_parts.append(part["text"])
+
+                    status_obj = result.get("status", {})
+                    raw_state = status_obj.get("state", "failed")
+                    mapped_state = _STATE_MAP.get(raw_state, raw_state.upper())
+
+                    task = {
+                        "id": result.get("id") or result.get("contextId"),
+                        "contextId": result.get("contextId"),
+                        "status": {"state": mapped_state},
+                        "history": [],
+                        "artifacts": [],
+                    }
+
+                    if text_parts:
+                        task["artifacts"] = [{"parts": [{"text": t} for t in text_parts]}]
+
+                    if mapped_state == "TASK_STATE_FAILED" and not task["artifacts"]:
+                        error_msg = status_obj.get("message") or (
+                            "The prior authorization service is temporarily "
+                            "unavailable (LLM rate limit exceeded). "
+                            "Please try again in a few minutes."
+                        )
+                        task["artifacts"] = [{"parts": [{"text": f"Error: {error_msg}"}]}]
+                        logger.info(
+                            "injected_error_artifact_history_shape context_id=%s msg=%s",
+                            task.get("contextId"),
+                            error_msg[:100],
+                        )
+
+                    resp_parsed["result"] = {"task": task}
+                    logger.info(
+                        "response_reshaped_history_to_po_a2a_json context_id=%s state=%s",
+                        task.get("contextId"),
+                        mapped_state,
                     )
 
                 resp_body = json.dumps(resp_parsed, ensure_ascii=False).encode("utf-8")

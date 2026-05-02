@@ -9,6 +9,7 @@ letter cannot contradict the criteria evaluation.
 
 from __future__ import annotations
 
+import html
 import json
 import logging
 import os
@@ -17,11 +18,25 @@ from typing import Annotated, Any
 
 import google.generativeai as genai
 from pydantic import Field
-from shared.models import CriteriaResult, Decision, PALetter, PatientContext
+from shared.models import CriteriaResult, Decision, LetterSection, PALetter, PatientContext
 
 from mcp_server.fhir.context import McpContext
 
 logger = logging.getLogger(__name__)
+
+# Canonical section headings — every letter uses this order.
+_CANONICAL_SECTIONS: list[str] = [
+    "Request",
+    "Patient Information",
+    "Clinical Summary",
+    "Conservative Treatment History",
+    "Medical Necessity",
+    "Supporting Documentation",
+]
+
+_NEEDS_INFO_HEADING_SWAP: dict[str, str] = {
+    "Medical Necessity": "Missing Documentation",
+}
 
 _PROMPT_FILE = "generate_pa_letter_v1.md"
 
@@ -35,6 +50,66 @@ def _criteria_version_tag(payer_id: str) -> str:
 def _load_system_prompt() -> str:
     pkg = resources.files("mcp_server.prompts")
     return (pkg / _PROMPT_FILE).read_text(encoding="utf-8")
+
+
+def _enforce_sections(
+    raw_sections: list[LetterSection],
+    decision: Decision,
+) -> list[LetterSection]:
+    """Reorder and rename sections to match the canonical structure."""
+    heading_swap = _NEEDS_INFO_HEADING_SWAP if decision == Decision.NEEDS_INFO else {}
+    lookup: dict[str, str] = {}
+    for sec in raw_sections:
+        lookup[sec.heading.strip().lower()] = sec.body
+
+    ordered: list[LetterSection] = []
+    for canonical in _CANONICAL_SECTIONS:
+        heading = heading_swap.get(canonical, canonical)
+        key = canonical.lower()
+        alt_key = heading.lower()
+        body = lookup.get(key) or lookup.get(alt_key) or ""
+        ordered.append(LetterSection(heading=heading, body=body))
+
+    return ordered
+
+
+def _render_markdown(letter: PALetter) -> str:
+    """Render a canonical markdown letter from structured sections."""
+    lines: list[str] = [f"**{letter.subject_line}**", ""]
+    if letter.urgent_banner:
+        lines += [f"> **URGENT**: {letter.urgent_banner}", ""]
+    for sec in letter.sections:
+        lines += [f"### {sec.heading}", "", sec.body, ""]
+    if letter.needs_info_checklist:
+        lines += ["### Action Items", ""]
+        for item in letter.needs_info_checklist:
+            lines.append(f"- {item}")
+        lines.append("")
+    return "\n".join(lines)
+
+
+def _render_html(letter: PALetter) -> str:
+    """Render a canonical HTML letter from structured sections."""
+    parts: list[str] = [
+        "<!DOCTYPE html>",
+        "<html><head><meta charset='utf-8'></head><body>",
+        f"<p><strong>{html.escape(letter.subject_line)}</strong></p>",
+    ]
+    if letter.urgent_banner:
+        parts.append(
+            f"<blockquote><strong>URGENT</strong>: {html.escape(letter.urgent_banner)}</blockquote>"
+        )
+    for sec in letter.sections:
+        parts.append(f"<h3>{html.escape(sec.heading)}</h3>")
+        escaped_body = html.escape(sec.body).replace("\n", "<br>")
+        parts.append(f"<p>{escaped_body}</p>")
+    if letter.needs_info_checklist:
+        parts.append("<h3>Action Items</h3><ul>")
+        for item in letter.needs_info_checklist:
+            parts.append(f"<li>{html.escape(item)}</li>")
+        parts.append("</ul>")
+    parts.append("</body></html>")
+    return "\n".join(parts)
 
 
 def _normalize_letter(
@@ -61,7 +136,9 @@ def _normalize_letter(
             if c.description or c.evidence
         ]
 
-    return draft.model_copy(
+    sections = _enforce_sections(draft.sections, criteria.decision)
+
+    normalized = draft.model_copy(
         update={
             "decision": criteria.decision,
             "patient_id": patient_id,
@@ -70,8 +147,14 @@ def _normalize_letter(
             "urgent_banner": urgent if criteria.red_flag_fast_track else None,
             "needs_info_checklist": needs_checklist,
             "source_criteria_version": _criteria_version_tag(criteria.payer_id),
+            "sections": sections,
         }
     )
+
+    normalized.rendered_markdown = _render_markdown(normalized)
+    normalized.rendered_html = _render_html(normalized)
+
+    return normalized
 
 
 async def _gemini_generate_letter(
@@ -79,7 +162,7 @@ async def _gemini_generate_letter(
     criteria: CriteriaResult,
     clinician_note: str | None,
 ) -> PALetter:
-    model_name = os.environ.get("GEMINI_MODEL", "gemini-3.1-flash-lite-preview")
+    model_name = os.environ.get("GEMINI_MODEL", "gemini-2.5-flash-lite")
     genai.configure(api_key=os.environ.get("GOOGLE_API_KEY", ""))  # type: ignore[attr-defined]
 
     system_prompt = _load_system_prompt()

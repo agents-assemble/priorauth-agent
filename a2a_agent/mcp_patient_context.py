@@ -93,8 +93,8 @@ def patient_context_mcp_toolsets() -> list[McpToolset]:
 
 
 def criteria_evaluator_mcp_toolsets() -> list[McpToolset]:
-    """Return the combined criteria-evaluation tool on the shared MCP server."""
-    return _streamable_mcp_toolsets(["evaluate_prior_auth"])
+    """Return the full-pipeline tool on the shared MCP server."""
+    return _streamable_mcp_toolsets(["run_prior_auth"])
 
 
 def pa_letter_mcp_toolsets() -> list[McpToolset]:

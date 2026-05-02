@@ -531,6 +531,22 @@ def _match_payer_id(name: str) -> str:
     return ""
 
 
+def detect_payer_from_text(note_text: str) -> tuple[str, str]:
+    """Best-effort payer detection from free-text clinical notes.
+
+    Scans *note_text* for any substring present in ``_PAYER_ROUTING`` and
+    returns ``(matched_substring, payer_id)`` on the first hit.  Returns
+    ``("", "")`` when nothing matches.
+
+    This is a **fallback only** — structured ``Coverage`` always wins.
+    """
+    lower = note_text.lower()
+    for needle, payer_id in _PAYER_ROUTING:
+        if needle in lower:
+            return needle, payer_id
+    return "", ""
+
+
 def _plan_name(res: dict[str, Any]) -> str | None:
     for cls in res.get("class", []):
         if cls.get("type", {}).get("coding", [{}])[0].get("code") == "plan":

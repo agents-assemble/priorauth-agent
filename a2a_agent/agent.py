@@ -140,11 +140,11 @@ def _deterministic_transfer(callback_context: Any, llm_request: Any) -> LlmRespo
     )
 
 
-# When pa_letter is live, the root must let the LLM decide routing (criteria
-# vs letter) based on the user message. Deterministic transfer always picks
-# criteria_evaluator, which breaks the "yes, generate the letter" follow-up
-# turn. The extra Gemini call on the root is cheap vs. wrong routing.
-_use_deterministic = _MCP_ACTIVE and not _mcp_pa_letter
+# Always use deterministic transfer when MCP is active. The criteria_evaluator
+# presents results without offering follow-ups, so there is no "yes, generate
+# the letter" second turn to route. This eliminates the root-agent LLM call
+# (~10s latency) and avoids rate-limit pressure on the Gemini free tier.
+_use_deterministic = _MCP_ACTIVE
 
 root_agent = Agent(
     name="priorauth_agent",
