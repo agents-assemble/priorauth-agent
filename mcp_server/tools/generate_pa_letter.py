@@ -135,6 +135,19 @@ def _render_markdown(
             lines.append(body_line)
         lines.append("")
 
+    if criteria:
+        audit_parts: list[str] = []
+        if criteria.review_status:
+            audit_parts.append(f"Status: {criteria.review_status}")
+        if criteria.policy_version_tag:
+            audit_parts.append(f"Policy: {criteria.policy_version_tag}")
+        if criteria.evaluated_at:
+            audit_parts.append(f"Evaluated: {criteria.evaluated_at}")
+        if audit_parts:
+            lines.append("Audit:")
+            lines.append(" | ".join(audit_parts))
+            lines.append("")
+
     lines.append("Human Review Note:")
     lines.append(_HUMAN_REVIEW_NOTE)
     lines.append("")

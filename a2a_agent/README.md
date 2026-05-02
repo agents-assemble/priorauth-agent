@@ -8,7 +8,7 @@ Bootstrapped from the [Prompt Opinion Google-ADK reference](https://github.com/p
 
 ## What this service does
 
-Receives A2A calls from Prompt Opinion (with a SHARP-propagated FHIR token in message metadata), orchestrates three internal sub-agents (Patient Context → Criteria Evaluator → PA Letter), and returns a submittable PA letter — or a needs-info checklist, or a red-flag-fast-track letter.
+**PriorAuth Preflight — Lumbar MRI.** Receives A2A calls from Prompt Opinion (with a SHARP-propagated FHIR token in message metadata), orchestrates internal sub-agents, and performs denial-prevention preflight: chart-procedure mismatch detection (DO NOT SUBMIT safety gate), missing-documentation identification with clinician gap-fix templates, red-flag fast-track, and ready-to-submit PA letter generation.
 
 ## Sub-agents (Week 2 — not in the spike yet)
 

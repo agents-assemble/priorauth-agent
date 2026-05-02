@@ -22,6 +22,12 @@ Newest entries go at the top. Keep each entry tight — 3 bullets, one line each
 - Blocked: Nothing. Person B tasks (B1-B6) are fully unblocked — gap-fix tool, DO_NOT_SUBMIT flow, evidence snippets, and audit metadata are all available via MCP.
 - Next: Person B picks up B1-B6. PAIR: Fly.io re-deploy after features merge.
 
+## 2026-05-02 — Person B
+
+- Done: B1–B6 from DIFFERENTIATION_PLAN.md: rebranded to "PriorAuth Preflight — Lumbar MRI" across agent card/app/README, wired `generate_gap_fix_note` MCP tool into criteria_evaluator toolset + instruction, updated orchestrator instruction for DO_NOT_SUBMIT + gap-fix flows, added audit footer rendering in `_render_markdown`, added `do_not_submit` to `_DECISION_LABEL` and `_enforce_sections`. Created demo storyboard (4-patient order) and Devpost draft with positioning hook.
+- Blocked: Nothing — Person A's A1-A5 now merged on main. All features integrated.
+- Next: Pair re-deploy to Fly.io. Integration smoke on all 4 patients in PO workspace.
+
 ## 2026-04-25 — Cursor (Person A track)
 
 - Done: Shipped MCP tool **`generate_pa_letter`** (`mcp_server/tools/generate_pa_letter.py` + `prompts/generate_pa_letter_v1.md`): Gemini JSON → `PALetter`, server-side normalization (decision/ids/`source_criteria_version`/urgent banner/checklist backfill). Registered in `mcp_server/server.py`. A2A: `pa_letter_mcp_toolsets()` on shared `McpToolset` (aligned with PR #22), `pa_letter` sub-agent Week-2 instruction/tools/`extract_fhir_context` when `MCP_SERVER_URL` set. Tests: `tests/mcp_server/test_generate_pa_letter.py`, `test_sub_agents.py` updated; `mcp_server/REFERENCE.md`.
