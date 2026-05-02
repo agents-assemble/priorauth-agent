@@ -44,30 +44,30 @@ _AGENT_URL = os.environ.get(
 
 a2a_app = create_a2a_app(
     agent=root_agent,
-    name="priorauth_agent",
+    name="priorauth_preflight",
     description=(
-        "Prior authorization agent for lumbar MRI (CPT 72148). "
-        "Evaluates payer criteria against a patient's FHIR context and generates "
-        "a ready-to-submit PA letter (or a needs-info checklist)."
+        "PriorAuth Preflight — Lumbar MRI (CPT 72148). "
+        "Denial-prevention preflight that evaluates payer criteria against "
+        "a patient's FHIR chart, surfaces missing documentation with "
+        "clinician-ready gap-fix templates, and generates ready-to-submit "
+        "PA letters only when the chart is complete."
     ),
     url=_AGENT_URL,
     port=8001,
     fhir_extension_uri=f"{_PO_BASE}/schemas/a2a/v1/fhir-context",
-    # Imported from shared/ — same tuple is advertised by the MCP server's
-    # capability extension. PO workspace filters to the intersection of the
-    # two lists, so keeping them in sync via import is load-bearing.
     fhir_scopes=list(FHIR_SCOPES),
     skills=[
         AgentSkill(
-            id="prior-auth-lumbar-mri",
-            name="prior-auth-lumbar-mri",
+            id="preflight-lumbar-mri",
+            name="preflight-lumbar-mri",
             description=(
-                "End-to-end prior authorization for outpatient lumbar MRI "
+                "Prior authorization preflight for outpatient lumbar MRI "
                 "(CPT 72148). Pulls patient context from FHIR, evaluates "
-                "payer criteria, and returns either an approved PA letter "
-                "or a needs-info checklist."
+                "payer criteria, detects chart-procedure mismatches, and "
+                "returns an approved PA letter, a needs-info checklist with "
+                "gap-fix templates, or a do-not-submit safety gate."
             ),
-            tags=["prior-auth", "mri", "lumbar", "fhir", "cpt-72148"],
+            tags=["prior-auth", "preflight", "mri", "lumbar", "fhir", "cpt-72148"],
         ),
     ],
 )

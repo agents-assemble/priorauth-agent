@@ -93,8 +93,10 @@ def patient_context_mcp_toolsets() -> list[McpToolset]:
 
 
 def criteria_evaluator_mcp_toolsets() -> list[McpToolset]:
-    """Return the full-pipeline tool plus patient-context lookup."""
-    return _streamable_mcp_toolsets(["run_prior_auth", "fetch_patient_context"])
+    """Return the full-pipeline tool, patient-context lookup, and gap-fix."""
+    return _streamable_mcp_toolsets(
+        ["run_prior_auth", "fetch_patient_context", "generate_gap_fix_note"]
+    )
 
 
 def pa_letter_mcp_toolsets() -> list[McpToolset]:

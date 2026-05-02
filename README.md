@@ -1,8 +1,8 @@
-# PriorAuth Agent
+# PriorAuth Preflight
 
-> Prior Authorization A2A agent for lumbar MRI, built for the [Agents Assemble](https://agents-assemble.devpost.com/) hackathon.
+> Denial-prevention preflight for lumbar MRI prior authorization, built for the [Agents Assemble](https://agents-assemble.devpost.com/) hackathon.
 
-Automates insurance prior-authorization approval for lumbar MRI (CPT 72148) using Prompt Opinion's A2A + MCP + FHIR stack. A clinician asks a question in their Prompt Opinion workspace, our external A2A agent orchestrates three internal sub-agents (retrieve → evaluate → draft letter) against our MCP tools, and returns a ready-to-submit PA letter — or an actionable needs-info checklist — in seconds instead of hours.
+Most PA agents generate packets. **PriorAuth Preflight decides whether a lumbar MRI packet should be generated at all, then fixes missing documentation first.** It evaluates payer criteria against a patient's FHIR chart, detects chart-procedure mismatches (DO NOT SUBMIT safety gate), surfaces missing documentation with clinician-ready gap-fix templates, and generates ready-to-submit PA letters only when the chart is complete — in seconds instead of hours.
 
 ---
 
@@ -73,9 +73,9 @@ make check
 ## Submission summary (what the judges see)
 
 - **Category**: Option 3 — Custom external A2A Agent.
-- **Primary deliverable**: `PriorAuth Agent` published to the Prompt Opinion Marketplace.
+- **Primary deliverable**: `PriorAuth Preflight` published to the Prompt Opinion Marketplace.
 - **Secondary deliverable**: `PriorAuth Toolkit` MCP server, also published to the marketplace for ecosystem visibility.
-- **Demo video**: under 3 minutes, pre-recorded, leads with the `needs-info` differentiator.
+- **Demo video**: under 3 minutes, pre-recorded, leads with the `needs-info` + gap-fix differentiator.
 - **Devpost writeup**: see `[SUBMISSION.md](SUBMISSION.md)` (draft).
 
 ## License

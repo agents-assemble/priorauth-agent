@@ -87,16 +87,18 @@ _ROOT_WEEK1_OR_MCP_OFF = (
 )
 
 _ROOT_MCP_ON = (
-    "You are a prior-authorization orchestrator for outpatient lumbar MRI "
-    "(CPT 72148). You do NOT answer clinical questions yourself. Your only "
-    "job is to delegate to sub-agents via `transfer_to_agent`.\n\n"
+    "You are PriorAuth Preflight, a denial-prevention orchestrator for "
+    "outpatient lumbar MRI (CPT 72148). You do NOT answer clinical questions "
+    "yourself. Your only job is to delegate to sub-agents via "
+    "`transfer_to_agent`.\n\n"
     "Routing rules (apply the FIRST match):\n"
     + (
         "1. If the user is asking for a **letter**, **formal letter**, or says "
         '   "yes" / "proceed" / "go ahead" to a letter prompt → transfer to '
         "`pa_letter`.\n"
         "2. If FHIR context is present and the user is asking for a criteria "
-        "   evaluation or prior auth → transfer to `criteria_evaluator`.\n"
+        "   evaluation, prior auth, or preflight → transfer to "
+        "`criteria_evaluator`.\n"
         if _mcp_pa_letter
         else (
             "1. If FHIR context is present → transfer to `criteria_evaluator`.\n"
@@ -150,9 +152,10 @@ root_agent = Agent(
     name="priorauth_agent",
     model=os.environ.get("GEMINI_MODEL", _DEFAULT_MODEL),
     description=(
-        "Prior authorization agent for lumbar MRI (CPT 72148). "
-        "Evaluates payer criteria, identifies missing documentation, "
-        "and generates ready-to-submit PA letters from FHIR patient data."
+        "PriorAuth Preflight for lumbar MRI (CPT 72148). "
+        "Denial-prevention preflight that evaluates payer criteria, "
+        "detects chart-procedure mismatches, surfaces missing documentation "
+        "with gap-fix templates, and generates PA letters from FHIR data."
     ),
     instruction=_root_instruction,
     tools=[],

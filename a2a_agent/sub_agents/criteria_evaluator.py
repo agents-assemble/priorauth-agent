@@ -27,21 +27,31 @@ from a2a_agent.mcp_patient_context import criteria_evaluator_mcp_toolsets
 from a2a_agent.po_base.fhir_hook import extract_fhir_context
 
 _WEEK_2_INSTRUCTION = (
-    "You are a prior-authorization specialist with two capabilities:\n\n"
+    "You are PriorAuth Preflight, a denial-prevention specialist with three "
+    "capabilities:\n\n"
     "1. **Patient lookup** — use `fetch_patient_context` to retrieve patient "
     "demographics, conditions, treatments, and imaging history.\n"
-    "2. **Prior-auth evaluation + letter** — use `run_prior_auth` to evaluate "
-    "payer criteria and generate a formal PA letter.\n\n"
+    "2. **Prior-auth preflight** — use `run_prior_auth` to evaluate payer "
+    "criteria and generate a readiness review.\n"
+    "3. **Gap-fix template** — use `generate_gap_fix_note` to create a "
+    "fill-in-the-blank clinical addendum when documentation gaps exist.\n\n"
     "ROUTING — read the user's message carefully:\n"
     "- If the user asks for **patient details**, **patient info**, **chart**, "
     "**demographics**, or **clinical summary** → call `fetch_patient_context` "
     "with the `patient_id` from the FHIR system note and `service_code` "
     '"72148". Present the returned patient data in a readable format.\n'
     "- If the user asks for a **prior auth**, **PA**, **authorization**, "
-    "**MRI approval**, or says **prior auth for spine MRI** → call "
-    "`run_prior_auth` with the same parameters. Present ONLY the "
-    "rendered_markdown field from the letter verbatim.\n"
-    "- If unsure, default to `run_prior_auth`.\n\n"
+    "**preflight**, or **MRI approval** → call `run_prior_auth` with the "
+    "same parameters.\n\n"
+    "AFTER receiving the `run_prior_auth` result:\n"
+    "1. Present the `rendered_markdown` field from the letter verbatim.\n"
+    "2. If the decision is `needs_info` or `do_not_submit`, ALSO call "
+    "`generate_gap_fix_note` with the `criteria_result_json` and "
+    "`patient_context_json` from the prior auth result. Then append the "
+    "gap-fix template below the letter under a heading "
+    '"Documentation Template".\n'
+    "3. If the decision is `approve`, do NOT call `generate_gap_fix_note`.\n\n"
+    "- If unsure what the user wants, default to `run_prior_auth`.\n\n"
     "Never fabricate evidence. If a tool returns an error, report it.\n\n"
     "IMPORTANT: Present only the results. Do NOT ask follow-up questions "
     "or offer to transfer to another agent."
@@ -62,10 +72,10 @@ criteria_evaluator_agent = Agent(
     name="criteria_evaluator",
     model=os.environ.get("GEMINI_MODEL", _DEFAULT_MODEL),
     description=(
-        "Prior-authorization criteria evaluator. Decides whether the "
-        "patient's documented context meets the payer's published medical-"
-        "necessity criteria for the requested service, and surfaces any "
-        "met/missing criteria and red-flag bypasses."
+        "PriorAuth Preflight evaluator. Performs denial-prevention "
+        "preflight: evaluates payer criteria, detects chart-procedure "
+        "mismatches, surfaces missing documentation, and generates "
+        "gap-fix templates for clinicians."
     ),
     instruction=_WEEK_2_INSTRUCTION if _criteria_mcp else _WEEK_1_STUB_INSTRUCTION,
     tools=_criteria_mcp,
