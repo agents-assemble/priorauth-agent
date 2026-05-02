@@ -224,7 +224,7 @@ async def _fetch_from_fhir(
             # If notes are still empty but documents exist, their content may
             # be stored as a URL reference rather than inline base64.
             if not notes and docs:
-                notes = await _fetch_docs_via_url(client, docs, patient_id)
+                notes = await _fetch_docs_via_url(client, docs, patient_id)  # type: ignore[arg-type]
     finally:
         if owns_http:
             await http.aclose()
