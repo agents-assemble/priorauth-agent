@@ -24,21 +24,23 @@ from mcp_server.fhir.context import McpContext
 
 logger = logging.getLogger(__name__)
 
-# Canonical section headings — every letter uses this order.
 _CANONICAL_SECTIONS: list[str] = [
-    "Request",
-    "Patient Information",
-    "Clinical Summary",
-    "Conservative Treatment History",
-    "Medical Necessity",
-    "Supporting Documentation",
+    "Summary",
+    "Records Reviewed",
+    "Criteria Trace",
+    "Policy Reference",
+    "Authorization Basis",
 ]
 
 _NEEDS_INFO_HEADING_SWAP: dict[str, str] = {
-    "Medical Necessity": "Missing Documentation",
+    "Authorization Basis": "Recommended Next Steps",
 }
 
-_PROMPT_FILE = "generate_pa_letter_v1.md"
+_DENY_HEADING_SWAP: dict[str, str] = {
+    "Authorization Basis": "Recommended Next Steps",
+}
+
+_PROMPT_FILE = "generate_pa_letter_v2.md"
 
 
 def _criteria_version_tag(payer_id: str) -> str:
@@ -57,7 +59,13 @@ def _enforce_sections(
     decision: Decision,
 ) -> list[LetterSection]:
     """Reorder and rename sections to match the canonical structure."""
-    heading_swap = _NEEDS_INFO_HEADING_SWAP if decision == Decision.NEEDS_INFO else {}
+    if decision == Decision.NEEDS_INFO:
+        heading_swap = _NEEDS_INFO_HEADING_SWAP
+    elif decision == Decision.DENY:
+        heading_swap = _DENY_HEADING_SWAP
+    else:
+        heading_swap = {}
+
     lookup: dict[str, str] = {}
     for sec in raw_sections:
         lookup[sec.heading.strip().lower()] = sec.body
@@ -73,18 +81,57 @@ def _enforce_sections(
     return ordered
 
 
-def _render_markdown(letter: PALetter) -> str:
-    """Render a canonical markdown letter from structured sections."""
-    lines: list[str] = [f"**{letter.subject_line}**", ""]
+_DECISION_LABEL = {
+    "approve": "APPROVED",
+    "needs_info": "NEEDS ADDITIONAL INFORMATION",
+    "deny": "DENIED",
+}
+
+_CPT_PROCEDURE_NAME: dict[str, str] = {
+    "72148": "Lumbar spine MRI without contrast",
+}
+
+_HUMAN_REVIEW_NOTE = (
+    "This is a prior authorization readiness review, not a final payer "
+    "determination. A clinician or prior authorization specialist should "
+    "review the chart and payer policy before submission."
+)
+
+
+def _render_markdown(
+    letter: PALetter,
+    context: PatientContext | None = None,
+    criteria: CriteriaResult | None = None,
+) -> str:
+    """Render the letter in the readiness-review format."""
+    decision_text = _DECISION_LABEL.get(letter.decision, letter.decision.upper())
+    procedure = _CPT_PROCEDURE_NAME.get(letter.service_cpt, f"CPT {letter.service_cpt}")
+
+    lines: list[str] = [letter.subject_line]
+    lines.append(f"Procedure: {procedure}")
+    lines.append(f"CPT: {letter.service_cpt}")
+    lines.append(f"Payer: {letter.payer_id}")
+    lines.append(f"Patient ID: {letter.patient_id}")
+    if context:
+        d = context.demographics
+        lines.append(f"Patient: {d.age}-year-old {d.sex}")
+    lines.append("")
+
+    lines.append(f"Readiness Decision: {decision_text}")
     if letter.urgent_banner:
-        lines += [f"> **URGENT**: {letter.urgent_banner}", ""]
+        lines.append(f"URGENT: {letter.urgent_banner}")
+    lines.append("")
+
     for sec in letter.sections:
-        lines += [f"### {sec.heading}", "", sec.body, ""]
-    if letter.needs_info_checklist:
-        lines += ["### Action Items", ""]
-        for item in letter.needs_info_checklist:
-            lines.append(f"- {item}")
+        lines.append(f"{sec.heading}:")
+        for body_line in sec.body.splitlines():
+            lines.append(body_line)
         lines.append("")
+
+    lines.append("Human Review Note:")
+    lines.append(_HUMAN_REVIEW_NOTE)
+    lines.append("")
+
     return "\n".join(lines)
 
 
@@ -151,7 +198,7 @@ def _normalize_letter(
         }
     )
 
-    normalized.rendered_markdown = _render_markdown(normalized)
+    normalized.rendered_markdown = _render_markdown(normalized, context, criteria)
     normalized.rendered_html = _render_html(normalized)
 
     return normalized

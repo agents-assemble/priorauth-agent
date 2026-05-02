@@ -1,0 +1,23 @@
+app = "priorauth-agent"
+primary_region = "iad"
+
+[build]
+  dockerfile = "a2a_agent/Dockerfile"
+
+[http_service]
+  internal_port = 8001
+  force_https = true
+  auto_stop_machines = "stop"
+  auto_start_machines = true
+  min_machines_running = 0
+
+[[vm]]
+  size = "shared-cpu-1x"
+  memory = "512mb"
+
+[env]
+  PO_PLATFORM_BASE_URL = "https://app.promptopinion.ai"
+  LOG_LEVEL = "INFO"
+  LOG_FULL_PAYLOAD = "false"
+  LOG_HOOK_RAW_OBJECTS = "false"
+  GOOGLE_GENAI_USE_VERTEXAI = "FALSE"
