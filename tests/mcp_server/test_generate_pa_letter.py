@@ -30,7 +30,12 @@ from shared.models import (
     PALetter,
 )
 
-from tests.mcp_server.test_match_payer_criteria import _patient_a, _patient_b, _patient_c
+from tests.mcp_server.test_match_payer_criteria import (
+    _patient_a,
+    _patient_b,
+    _patient_c,
+    _patient_d,
+)
 
 _SSE_DATA_RE = re.compile(r"^data:\s*(.+)$", re.MULTILINE)
 
@@ -212,6 +217,44 @@ async def test_llm_smoke_patient_a_approve() -> None:
     assert out.patient_id == "patient-a"
     assert len(out.rendered_html) > 20
     assert len(out.rendered_markdown) > 10
+
+
+def _do_not_submit_criteria() -> CriteriaResult:
+    return CriteriaResult(
+        decision=Decision.DO_NOT_SUBMIT,
+        payer_id="cigna",
+        service_cpt="72148",
+        criteria_missing=[
+            CriterionCheck(
+                id="system.chart_mismatch",
+                description="Chart must contain spine-related diagnosis",
+                met=False,
+                evidence="Active conditions: J02.9 (Acute pharyngitis), I10 (Hypertension).",
+                source_document="Condition",
+            )
+        ],
+        confidence=1.0,
+        reasoning_trace="No lumbar/spine diagnoses found in the chart.",
+    )
+
+
+@pytest.mark.asyncio
+async def test_do_not_submit_letter_bypasses_llm() -> None:
+    """DO_NOT_SUBMIT generates a letter deterministically without calling Gemini."""
+    ctx = _patient_d()
+    crit = _do_not_submit_criteria()
+    out = await generate_pa_letter(
+        patient_context_json=ctx.model_dump_json(),
+        criteria_result_json=crit.model_dump_json(),
+        ctx=None,  # type: ignore[arg-type]
+    )
+    assert out.decision == Decision.DO_NOT_SUBMIT
+    assert out.patient_id == "patient-d"
+    assert "DO NOT SUBMIT" in out.subject_line
+    assert "DO NOT SUBMIT" in out.rendered_markdown
+    assert len(out.sections) == 5
+    chart_mismatch_section = next((s for s in out.sections if "Chart Mismatch" in s.heading), None)
+    assert chart_mismatch_section is not None
 
 
 def test_mcp_protocol_tools_call_via_asgi() -> None:
