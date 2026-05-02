@@ -1,0 +1,23 @@
+app = "priorauth-mcp"
+primary_region = "iad"
+
+[build]
+  dockerfile = "mcp_server/Dockerfile"
+
+[http_service]
+  internal_port = 8000
+  force_https = true
+  auto_stop_machines = "stop"
+  auto_start_machines = true
+  min_machines_running = 0
+
+[[vm]]
+  size = "shared-cpu-1x"
+  memory = "512mb"
+
+[env]
+  MCP_HOST = "0.0.0.0"
+  MCP_PORT = "8000"
+  LOG_LEVEL = "INFO"
+  LOG_FULL_PAYLOAD = "false"
+  GOOGLE_GENAI_USE_VERTEXAI = "FALSE"
