@@ -121,6 +121,7 @@ class Decision(StrEnum):
     APPROVE = "approve"
     NEEDS_INFO = "needs_info"
     DENY = "deny"
+    DO_NOT_SUBMIT = "do_not_submit"
 
 
 class CriterionCheck(BaseModel):
@@ -132,6 +133,17 @@ class CriterionCheck(BaseModel):
     description: str
     met: bool
     evidence: str = Field(description="How it was (or wasn't) supported by PatientContext")
+    source_document: str | None = Field(
+        default=None,
+        description=(
+            "FHIR resource reference backing this check, "
+            "e.g. 'Condition/M54.51', 'Procedure/2026-03-15', 'DocumentReference/2026-04-01'."
+        ),
+    )
+    snippet: str | None = Field(
+        default=None,
+        description="Short quoted text from the chart that supports or refutes this criterion.",
+    )
 
 
 class CriteriaResult(BaseModel):
@@ -158,6 +170,28 @@ class CriteriaResult(BaseModel):
     source_policy_url: str | None = Field(
         default=None,
         description="URL of the payer's published policy document for this criteria set.",
+    )
+    evaluated_at: str | None = Field(
+        default=None,
+        description="ISO-8601 timestamp of when the evaluation was performed.",
+    )
+    policy_version_tag: str | None = Field(
+        default=None,
+        description="Version tag of the payer criteria JSON used, e.g. 'aetna_lumbar_mri.v2026'.",
+    )
+    evidence_sources_used: list[str] = Field(
+        default_factory=list,
+        description=(
+            "FHIR resource types that returned non-empty data for this evaluation, "
+            "e.g. ['Patient', 'Condition', 'MedicationRequest', 'Procedure', 'DocumentReference']."
+        ),
+    )
+    review_status: str = Field(
+        default="pending_human_review",
+        description=(
+            "Always starts as 'pending_human_review'. Never 'auto_approved' — "
+            "human sign-off is required before submission."
+        ),
     )
 
 
@@ -198,6 +232,42 @@ class PALetter(BaseModel):
     source_criteria_version: str = Field(
         default="",
         description="Version tag of the payer criteria JSON used, e.g. 'cigna_lumbar_mri.v1'.",
+    )
+
+
+# ---------------------------------------------------------------------------
+# Level 3b: Clinician gap-fix note (produced by generate_gap_fix_note)
+# ---------------------------------------------------------------------------
+
+
+class GapFixNote(BaseModel):
+    """Clinician-facing note template to close documentation gaps.
+
+    Produced by the MCP tool ``generate_gap_fix_note`` when the criteria
+    result is ``needs_info`` or ``do_not_submit``.  Contains a fill-in-
+    the-blank addendum the clinician can paste into their chart, with
+    ``[bracketed placeholders]`` for unfilled fields.
+    """
+
+    decision: Decision
+    patient_id: str
+    payer_id: str
+    service_cpt: str
+    template_text: str = Field(
+        description=(
+            "Fill-in-the-blank clinical addendum with [bracketed placeholders] "
+            "for fields the clinician must complete."
+        ),
+    )
+    fields_to_complete: list[str] = Field(
+        default_factory=list,
+        description=(
+            "Each [placeholder] from template_text with a short explanation of what to fill."
+        ),
+    )
+    rendered_markdown: str = Field(
+        default="",
+        description="Markdown rendering of the template for display.",
     )
 
 
