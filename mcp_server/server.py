@@ -20,6 +20,7 @@ from shared.fhir_scopes import FHIR_SCOPES
 
 from mcp_server.tools.evaluate_prior_auth import evaluate_prior_auth
 from mcp_server.tools.fetch_patient_context import fetch_patient_context
+from mcp_server.tools.generate_gap_fix_note import generate_gap_fix_note
 from mcp_server.tools.generate_pa_letter import generate_pa_letter
 from mcp_server.tools.match_payer_criteria import match_payer_criteria
 from mcp_server.tools.run_prior_auth import run_prior_auth
@@ -103,6 +104,18 @@ mcp.tool(
         "and match_payer_criteria (or evaluate_prior_auth for criteria)."
     ),
 )(generate_pa_letter)
+
+
+mcp.tool(
+    name="generate_gap_fix_note",
+    description=(
+        "Generate a clinician gap-fix note when criteria evaluation yields "
+        "needs_info or do_not_submit. Returns a GapFixNote with a fill-in-"
+        "the-blank addendum the clinician can paste into their chart to "
+        "close documentation gaps. Requires the JSON outputs of "
+        "fetch_patient_context and match_payer_criteria."
+    ),
+)(generate_gap_fix_note)
 
 
 mcp.tool(

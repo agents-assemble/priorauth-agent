@@ -40,6 +40,10 @@ _DENY_HEADING_SWAP: dict[str, str] = {
     "Authorization Basis": "Recommended Next Steps",
 }
 
+_DO_NOT_SUBMIT_HEADING_SWAP: dict[str, str] = {
+    "Authorization Basis": "Chart Mismatch Details",
+}
+
 _PROMPT_FILE = "generate_pa_letter_v2.md"
 
 
@@ -59,7 +63,9 @@ def _enforce_sections(
     decision: Decision,
 ) -> list[LetterSection]:
     """Reorder and rename sections to match the canonical structure."""
-    if decision == Decision.NEEDS_INFO:
+    if decision == Decision.DO_NOT_SUBMIT:
+        heading_swap = _DO_NOT_SUBMIT_HEADING_SWAP
+    elif decision == Decision.NEEDS_INFO:
         heading_swap = _NEEDS_INFO_HEADING_SWAP
     elif decision == Decision.DENY:
         heading_swap = _DENY_HEADING_SWAP
@@ -85,6 +91,7 @@ _DECISION_LABEL = {
     "approve": "APPROVED",
     "needs_info": "NEEDS ADDITIONAL INFORMATION",
     "deny": "DENIED",
+    "do_not_submit": "DO NOT SUBMIT",
 }
 
 _CPT_PROCEDURE_NAME: dict[str, str] = {
@@ -204,6 +211,85 @@ def _normalize_letter(
     return normalized
 
 
+def _build_do_not_submit_letter(
+    context: PatientContext,
+    criteria: CriteriaResult,
+) -> PALetter:
+    """Build a deterministic DO_NOT_SUBMIT letter without calling the LLM.
+
+    The chart contains no diagnoses relevant to the requested procedure, so
+    there is nothing for the LLM to reason about. A direct, structured
+    response is more reliable and cheaper.
+    """
+    patient_id = context.demographics.patient_id
+    payer_id = criteria.payer_id or "unknown"
+    service_cpt = criteria.service_cpt or "72148"
+    procedure = _CPT_PROCEDURE_NAME.get(service_cpt, f"CPT {service_cpt}")
+
+    conditions = (
+        ", ".join(f"{c.code} ({c.display})" for c in context.active_conditions) or "none documented"
+    )
+    missing_evidence = (
+        "; ".join(c.evidence for c in criteria.criteria_missing if c.evidence)
+        or criteria.reasoning_trace
+    )
+
+    sections = _enforce_sections(
+        [
+            LetterSection(
+                heading="Summary",
+                body=(
+                    f"Prior authorization readiness review for {procedure} "
+                    f"(CPT {service_cpt}) — DO NOT SUBMIT.\n"
+                    f"The patient's chart does not contain diagnoses relevant "
+                    f"to lumbar spine imaging. Submitting this request will "
+                    f"result in an automatic denial."
+                ),
+            ),
+            LetterSection(
+                heading="Records Reviewed",
+                body=f"Active conditions: {conditions}.",
+            ),
+            LetterSection(
+                heading="Criteria Trace",
+                body=(f"Chart-mismatch pre-check failed: {missing_evidence}"),
+            ),
+            LetterSection(
+                heading="Policy Reference",
+                body=(
+                    "Lumbar MRI requires at least one spine-related diagnosis "
+                    "(ICD-10 M54.x, M51.x, M47.x, M48.x, G83.x, etc.) or "
+                    "documented red-flag findings."
+                ),
+            ),
+            LetterSection(
+                heading="Chart Mismatch Details",
+                body=(
+                    "Action: Review the chart and confirm the correct patient "
+                    "and procedure were selected. If lumbar pathology exists, "
+                    "ensure it is coded in the problem list before resubmitting."
+                ),
+            ),
+        ],
+        Decision.DO_NOT_SUBMIT,
+    )
+
+    letter = PALetter(
+        decision=criteria.decision.value,
+        patient_id=patient_id,
+        payer_id=payer_id,
+        service_cpt=service_cpt,
+        subject_line=f"PA Readiness Review — DO NOT SUBMIT — {procedure}",
+        sections=sections,
+        source_criteria_version=_criteria_version_tag(payer_id),
+        rendered_html="",
+        rendered_markdown="",
+    )
+    letter.rendered_markdown = _render_markdown(letter, context, criteria)
+    letter.rendered_html = _render_html(letter)
+    return letter
+
+
 async def _gemini_generate_letter(
     context: PatientContext,
     criteria: CriteriaResult,
@@ -277,7 +363,7 @@ async def generate_pa_letter(
         ),
     ] = None,
 ) -> PALetter:
-    """Draft a PA letter (or needs-info / denial letter) from context + criteria."""
+    """Draft a PA letter (or needs-info / denial / do-not-submit letter) from context + criteria."""
     context = PatientContext.model_validate_json(patient_context_json)
     criteria = CriteriaResult.model_validate_json(criteria_result_json)
 
@@ -288,6 +374,9 @@ async def generate_pa_letter(
         criteria.decision.value,
         type(ctx).__name__,
     )
+
+    if criteria.decision == Decision.DO_NOT_SUBMIT:
+        return _build_do_not_submit_letter(context, criteria)
 
     draft = await _gemini_generate_letter(context, criteria, clinician_note)
     return _normalize_letter(draft, context, criteria)

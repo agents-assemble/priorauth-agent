@@ -1,13 +1,16 @@
 """Tests for Tool 2 — match_payer_criteria.
 
-Two tiers:
+Three tiers:
 
 Tier 1 — deterministic (no LLM, always runs in CI):
     Unit tests for the pure rule-engine helpers (_check_red_flags,
-    _select_pathway, _check_service_applicable, etc.).
+    _select_pathway, _check_service_applicable, _check_chart_mismatch, etc.).
+
+Tier 1.5 — full tool, deterministic paths (no LLM call):
+    Red-flag fast-track, wrong CPT, unknown payer, chart mismatch.
 
 Tier 2 — LLM integration (@pytest.mark.llm, skipped in `make test-fast`):
-    Full tool invocations against all 3 demo patients. Asserts on
+    Full tool invocations against all 4 demo patients. Asserts on
     Decision enum + red_flag_fast_track + list non-emptiness, NOT
     exact string matching on reasoning_trace.
 """
@@ -18,6 +21,7 @@ import pytest
 from mcp_server.criteria.loader import load_payer_criteria
 from mcp_server.tools.match_payer_criteria import (
     _build_preliminary_findings,
+    _check_chart_mismatch,
     _check_red_flags,
     _check_service_applicable,
     _estimate_therapy_duration_weeks,
@@ -174,6 +178,31 @@ def _patient_c() -> PatientContext:
             "History of ER+ breast cancer 7 years ago on anastrozole. "
             "Decreased rectal tone. Textbook cauda equina presentation."
         ),
+    )
+
+
+def _patient_d() -> PatientContext:
+    """36F chart mismatch: pharyngitis + HTN, zero spine diagnoses."""
+    return PatientContext(
+        demographics=Demographics(patient_id="patient-d", age=36, sex="female"),
+        active_conditions=[
+            Condition(
+                code="J02.9", display="Acute pharyngitis, unspecified", onset_date="2026-04-20"
+            ),
+            Condition(
+                code="I10", display="Essential (primary) hypertension", onset_date="2024-01-15"
+            ),
+        ],
+        conservative_therapy_trials=[],
+        service_request=ServiceRequest(
+            cpt_code="72148",
+            description="MRI Lumbar Spine without contrast",
+            ordered_date="2026-04-22",
+            ordering_provider="Dr. James Kim, MD",
+            reason_codes=["J02.9"],
+        ),
+        coverage=Coverage(payer_id="cigna", payer_name="Cigna HealthCare"),
+        clinical_notes_excerpt="36F presents with sore throat x3 days. No back pain.",
     )
 
 
@@ -357,6 +386,118 @@ async def test_unknown_payer_slug_needs_info() -> None:
 # ---------------------------------------------------------------------------
 
 
+class TestChartMismatch:
+    """Tier 1 — _check_chart_mismatch deterministic tests."""
+
+    def test_patient_d_triggers_mismatch(self) -> None:
+        result = _check_chart_mismatch(_patient_d())
+        assert result is not None
+        assert result.decision == Decision.DO_NOT_SUBMIT
+        assert result.criteria_missing[0].id == "system.chart_mismatch"
+
+    def test_patient_a_no_mismatch(self) -> None:
+        assert _check_chart_mismatch(_patient_a()) is None
+
+    def test_patient_b_no_mismatch(self) -> None:
+        assert _check_chart_mismatch(_patient_b()) is None
+
+    def test_patient_c_no_mismatch(self) -> None:
+        assert _check_chart_mismatch(_patient_c()) is None
+
+    def test_empty_conditions_triggers_mismatch(self) -> None:
+        ctx = _patient_d()
+        ctx.active_conditions = []
+        result = _check_chart_mismatch(ctx)
+        assert result is not None
+        assert result.decision == Decision.DO_NOT_SUBMIT
+
+    def test_red_flags_bypass_mismatch(self) -> None:
+        """Even with non-spine ICD codes, red-flag candidates prevent mismatch."""
+        ctx = _patient_d()
+        ctx.red_flag_candidates = [
+            RedFlagCandidate(
+                label="history_of_cancer",
+                source="clinical_note",
+                evidence="patient reports history of cancer",
+            )
+        ]
+        assert _check_chart_mismatch(ctx) is None
+
+
+class TestRedFlagEvidenceSnippets:
+    """Tier 1 — verify source_document and snippet on red-flag checks."""
+
+    def test_red_flag_checks_have_source_document(self) -> None:
+        _, _, checks = _check_red_flags(_patient_c(), _AETNA)
+        assert len(checks) >= 1
+        for check in checks:
+            assert check.source_document is not None
+            assert "RedFlagCandidate/" in check.source_document
+
+    def test_red_flag_checks_have_snippet(self) -> None:
+        _, _, checks = _check_red_flags(_patient_c(), _CIGNA)
+        assert len(checks) >= 1
+        for check in checks:
+            assert check.snippet is not None
+            assert len(check.snippet) > 0
+
+
+# ---------------------------------------------------------------------------
+# Tier 1.5b — full tool, DO_NOT_SUBMIT path (no LLM call)
+# ---------------------------------------------------------------------------
+
+
+@pytest.mark.asyncio
+async def test_patient_d_chart_mismatch_do_not_submit() -> None:
+    """Chart mismatch: 36F with pharyngitis + HTN -> DO_NOT_SUBMIT, no Gemini call."""
+    ctx = _patient_d()
+    result = await match_payer_criteria(
+        patient_context_json=ctx.model_dump_json(),
+        payer_id="cigna",
+        service_code="72148",
+        ctx=None,  # type: ignore[arg-type]
+    )
+    assert result.decision == Decision.DO_NOT_SUBMIT
+    assert result.confidence == 1.0
+    assert result.criteria_missing[0].id == "system.chart_mismatch"
+    assert result.evaluated_at is not None
+    assert result.evidence_sources_used
+
+
+# ---------------------------------------------------------------------------
+# Tier 1.5c — audit metadata on all deterministic paths
+# ---------------------------------------------------------------------------
+
+
+@pytest.mark.asyncio
+async def test_red_flag_fast_track_has_audit_metadata() -> None:
+    ctx = _patient_c()
+    result = await match_payer_criteria(
+        patient_context_json=ctx.model_dump_json(),
+        payer_id="aetna",
+        service_code="72148",
+        ctx=None,  # type: ignore[arg-type]
+    )
+    assert result.evaluated_at is not None
+    assert result.policy_version_tag is not None
+    assert "aetna" in result.policy_version_tag
+    assert "Patient" in result.evidence_sources_used
+    assert result.review_status == "pending_human_review"
+
+
+@pytest.mark.asyncio
+async def test_unknown_payer_has_audit_metadata() -> None:
+    ctx = _patient_a()
+    result = await match_payer_criteria(
+        patient_context_json=ctx.model_dump_json(),
+        payer_id="humana",
+        service_code="72148",
+        ctx=None,  # type: ignore[arg-type]
+    )
+    assert result.evaluated_at is not None
+    assert result.evidence_sources_used
+
+
 @pytest.mark.llm
 @pytest.mark.asyncio
 async def test_patient_a_cigna_approves() -> None:
@@ -407,3 +548,42 @@ async def test_patient_a_aetna_approves_via_radiculopathy_pathway() -> None:
     assert result.decision == Decision.APPROVE
     assert result.red_flag_fast_track is False
     assert result.source_policy_url is not None
+
+
+@pytest.mark.llm
+@pytest.mark.asyncio
+async def test_patient_b_still_needs_info_not_do_not_submit() -> None:
+    """CRITICAL: Patient B has M54.50 (spine-related) — must be NEEDS_INFO, never DO_NOT_SUBMIT."""
+    ctx = _patient_b()
+    result = await match_payer_criteria(
+        patient_context_json=ctx.model_dump_json(),
+        payer_id="cigna",
+        service_code="72148",
+        ctx=None,  # type: ignore[arg-type]
+    )
+    assert result.decision == Decision.NEEDS_INFO, (
+        f"Patient B routes to {result.decision.value!r} — must be needs_info. "
+        "M54.50 is a spine code so chart-mismatch must NOT fire."
+    )
+    assert result.evaluated_at is not None
+    assert result.policy_version_tag is not None
+    assert result.review_status == "pending_human_review"
+
+
+@pytest.mark.llm
+@pytest.mark.asyncio
+async def test_llm_path_populates_audit_metadata() -> None:
+    """LLM path (Patient A approve) should have audit metadata stamped."""
+    ctx = _patient_a()
+    result = await match_payer_criteria(
+        patient_context_json=ctx.model_dump_json(),
+        payer_id="cigna",
+        service_code="72148",
+        ctx=None,  # type: ignore[arg-type]
+    )
+    assert result.decision == Decision.APPROVE
+    assert result.evaluated_at is not None
+    assert result.policy_version_tag is not None
+    assert "cigna" in result.policy_version_tag
+    assert len(result.evidence_sources_used) >= 4
+    assert result.review_status == "pending_human_review"

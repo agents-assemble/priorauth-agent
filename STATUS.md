@@ -16,6 +16,12 @@ Newest entries go at the top. Keep each entry tight — 3 bullets, one line each
 
 ---
 
+## 2026-05-02 — Person A (Preflight differentiation features — all Person A tasks complete)
+
+- Done: Shipped all 6 Person A tasks from `docs/DIFFERENTIATION_PLAN.md` in one PR on branch `feat/preflight-person-a`. (A1) Chart-mismatch pre-check `_check_chart_mismatch` in `match_payer_criteria` → `DO_NOT_SUBMIT` when no spine ICD codes and no red-flag candidates; deterministic `_build_do_not_submit_letter` in `generate_pa_letter` bypasses Gemini. (A2) New MCP tool `generate_gap_fix_note` — Gemini-powered fill-in-the-blank clinical addendum for `needs_info`/`do_not_submit`; prompt `generate_gap_fix_note_v1.md`; registered in `server.py`. (A3) Updated `match_criteria_v1.md` prompt to instruct `source_document`/`snippet` on every `CriterionCheck`; deterministic red-flag path now populates both fields. (A4) Audit metadata (`evaluated_at`, `policy_version_tag`, `evidence_sources_used`, `review_status`) stamped on every `match_payer_criteria` exit path via `_stamp_audit` helper. (A5) Patient D bundle `demo/patients/patient_d.json` — 36F Diana Demo with J02.9 pharyngitis + I10 HTN, no spine codes. (A6) 53 deterministic tests pass (6 LLM-tier deselected): chart-mismatch (6), red-flag evidence snippets (2), DO_NOT_SUBMIT full tool (1), audit metadata (2), DO_NOT_SUBMIT letter (1), Patient D bundle (4), plus all pre-existing tests green. Critical Patient B verification test added (LLM tier): M54.50 must route to `NEEDS_INFO`, not `DO_NOT_SUBMIT`.
+- Blocked: Nothing. Person B tasks (B1-B6) are fully unblocked — gap-fix tool, DO_NOT_SUBMIT flow, evidence snippets, and audit metadata are all available via MCP.
+- Next: Person B picks up B1-B6. PAIR: Fly.io re-deploy after features merge.
+
 ## 2026-04-25 — Cursor (Person A track)
 
 - Done: Shipped MCP tool **`generate_pa_letter`** (`mcp_server/tools/generate_pa_letter.py` + `prompts/generate_pa_letter_v1.md`): Gemini JSON → `PALetter`, server-side normalization (decision/ids/`source_criteria_version`/urgent banner/checklist backfill). Registered in `mcp_server/server.py`. A2A: `pa_letter_mcp_toolsets()` on shared `McpToolset` (aligned with PR #22), `pa_letter` sub-agent Week-2 instruction/tools/`extract_fhir_context` when `MCP_SERVER_URL` set. Tests: `tests/mcp_server/test_generate_pa_letter.py`, `test_sub_agents.py` updated; `mcp_server/REFERENCE.md`.

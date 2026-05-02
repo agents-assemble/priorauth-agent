@@ -78,7 +78,7 @@ def _first(bundle: dict[str, Any], resource_type: str) -> dict[str, Any]:
 # ---------------------------------------------------------------------------
 
 
-@pytest.mark.parametrize("stem", ["patient_a", "patient_b", "patient_c"])
+@pytest.mark.parametrize("stem", ["patient_a", "patient_b", "patient_c", "patient_d"])
 def test_bundle_is_well_formed_transaction(stem: str) -> None:
     bundle = _load(stem)
     assert bundle["resourceType"] == "Bundle"
@@ -286,6 +286,38 @@ def test_patient_c_bundle_hx_cancer_surfaces_history_of_cancer_redflag() -> None
 
 
 # ---------------------------------------------------------------------------
+# Patient D — chart mismatch / DO_NOT_SUBMIT
+# ---------------------------------------------------------------------------
+
+
+def test_patient_d_bundle_chart_mismatch_no_spine_diagnoses() -> None:
+    bundle = _load("patient_d")
+
+    demographics = extract_demographics(_first(bundle, "Patient"))
+    assert demographics.patient_id == "demo-patient-d"
+    assert demographics.sex == "female"
+    assert demographics.age in {35, 36}  # DOB 1990-06-12
+
+    conditions = extract_conditions(_resources(bundle, "Condition"))
+    codes = {c.code for c in conditions}
+    assert codes == {"J02.9", "I10"}, (
+        "Patient D has only pharyngitis (J02.9) and hypertension (I10). "
+        "Neither is related to lumbar spine imaging — this is the chart-"
+        "mismatch scenario for DO_NOT_SUBMIT."
+    )
+
+    sr = extract_service_request(_resources(bundle, "ServiceRequest"), cpt_code="72148")
+    assert sr.cpt_code == "72148"
+    assert "Kim" in sr.ordering_provider
+
+    cov = extract_coverage(_resources(bundle, "Coverage"))
+    assert cov.payer_id == "cigna"
+
+    redflags = detect_redflags_from_conditions(conditions)
+    assert redflags == [], f"Patient D must emit zero ICD red flags, got {redflags}"
+
+
+# ---------------------------------------------------------------------------
 # ServiceRequest priority — Patient C is STAT; A and B are routine.
 # Not extracted by the extractor today (the rule engine will use priority in
 # Week 2 as a tiebreaker when free-text red flags are ambiguous), so we assert
@@ -299,6 +331,7 @@ def test_patient_c_bundle_hx_cancer_surfaces_history_of_cancer_redflag() -> None
         ("patient_a", "routine"),
         ("patient_b", "routine"),
         ("patient_c", "stat"),
+        ("patient_d", "routine"),
     ],
 )
 def test_service_request_priority_matches_scenario(stem: str, expected_priority: str) -> None:

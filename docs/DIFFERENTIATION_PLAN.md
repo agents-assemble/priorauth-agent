@@ -7,22 +7,22 @@ todos:
     status: completed
   - id: a-do-not-submit
     content: "Person A: Add chart-mismatch pre-check to match_payer_criteria + DO_NOT_SUBMIT branch in generate_pa_letter"
-    status: pending
+    status: completed
   - id: a-gap-fix-tool
     content: "Person A: New MCP tool generate_gap_fix_note — prompt + tool + server registration"
-    status: pending
+    status: completed
   - id: a-evidence-snippets
     content: "Person A: Update match_criteria_v1.md prompt for source_document/snippet; update deterministic paths in match_payer_criteria"
-    status: pending
+    status: completed
   - id: a-audit-metadata
     content: "Person A: Populate evaluated_at, policy_version_tag, evidence_sources_used, review_status in match_payer_criteria"
-    status: pending
+    status: completed
   - id: a-patient-d
     content: "Person A: Create 4th demo patient bundle (chart-procedure mismatch) for DO_NOT_SUBMIT flow"
-    status: pending
+    status: completed
   - id: a-golden-tests
     content: "Person A: Golden tests for DO_NOT_SUBMIT, gap-fix-note, evidence snippets, audit metadata. MUST verify Patient B (M54.50 + NSAID) still routes to NEEDS_INFO (not DO_NOT_SUBMIT) after chart-mismatch pre-check."
-    status: pending
+    status: completed
   - id: b-rebrand
     content: "Person B: Rename agent to 'PriorAuth Preflight - Lumbar MRI' in agent card, instructions, app.py, README"
     status: pending

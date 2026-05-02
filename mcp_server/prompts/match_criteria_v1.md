@@ -30,14 +30,24 @@ Produce a JSON object matching the `CriteriaResult` schema exactly.
   evidence. Prefer this over `deny` when evidence is ambiguous.
 - `deny` — the service is explicitly not covered (e.g., wrong CPT, excluded
   diagnosis). Use sparingly.
+- `do_not_submit` — the chart does not contain any diagnoses relevant to the
+  requested procedure. This is a pre-check: you should NOT use this value;
+  it is set by the deterministic rule engine before you are called.
 
 ### Fields
 
 - `criteria_met` — list of criteria that ARE supported by the patient data.
   Each entry needs an `id` (stable identifier), `description`, `met: true`,
   and `evidence` citing specific data from the PatientContext.
+  **NEW — also populate these fields on each CriterionCheck:**
+  - `source_document` — the FHIR resource reference that backs this criterion
+    (e.g., `Condition/M54.51`, `Procedure/97110`, `MedicationRequest/ibuprofen`).
+  - `snippet` — a short, quoted excerpt from the chart or clinical notes that
+    directly evidences the criterion. 1-2 sentences max.
 - `criteria_missing` — list of criteria that are NOT supported. Each entry
-  needs `met: false` and `evidence` explaining what is missing.
+  needs `met: false` and `evidence` explaining what is missing. Also populate
+  `source_document` (if a resource was checked but insufficient) and `snippet`
+  (quote what was found, or leave null if nothing was found).
 - `reasoning_trace` — 2-4 sentence explanation of how you reached the
   decision. Reference specific patient data and policy sections.
 - `confidence` — float 0.0-1.0:
@@ -67,3 +77,10 @@ Produce a JSON object matching the `CriteriaResult` schema exactly.
   consulted, no red-flag fast-track applies.
 - **Do NOT populate `source_policy_url`** — it is injected after your
   response.
+- **Do NOT populate audit metadata fields** (`evaluated_at`,
+  `policy_version_tag`, `evidence_sources_used`, `review_status`) — these
+  are injected server-side after your response.
+- **Always populate `source_document` and `snippet`** on every
+  CriterionCheck. If you cannot identify a FHIR resource, use
+  `"clinical_notes_excerpt"` as the source_document. If no snippet is
+  available, set snippet to null.

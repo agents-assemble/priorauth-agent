@@ -27,7 +27,7 @@ from __future__ import annotations
 import json
 import logging
 import os
-from datetime import date
+from datetime import UTC, date, datetime
 from importlib import resources
 from typing import Annotated
 
@@ -50,10 +50,77 @@ _RADICULOPATHY_PREFIXES = ("M54.1",)
 _SPONDYLOLISTHESIS_DDD_PREFIXES = ("M43.1", "M51", "M47.8")
 _REGISTERED_PAYERS: frozenset[str] = frozenset(registered_payer_ids())
 
+_LUMBAR_MRI_RELEVANT_ICD_PREFIXES: tuple[str, ...] = (
+    "M54",  # dorsalgia / back pain
+    "M51",  # intervertebral disc disorders
+    "M47",  # spondylosis
+    "M48",  # spinal stenosis, kissing spine, etc.
+    "M43",  # spondylolisthesis
+    "G83",  # cauda equina syndrome
+    "S32",  # fracture of lumbar spine / pelvis
+    "C79.5",  # secondary malignant neoplasm of bone/marrow (spinal mets)
+    "M46",  # spinal osteomyelitis / infection
+    "Q05",  # spina bifida
+    "Q06",  # other congenital spine malformations
+    "R32",  # urinary incontinence (cauda equina indicator)
+    "R33",  # urinary retention (cauda equina indicator)
+    "Z85",  # personal hx malignant neoplasm (cancer history)
+    "M80",  # osteoporosis with pathological fracture
+)
+
 
 # ---------------------------------------------------------------------------
 # Layer 1 — deterministic rule helpers (pure, no I/O)
 # ---------------------------------------------------------------------------
+
+
+def _check_chart_mismatch(context: PatientContext) -> CriteriaResult | None:
+    """Return DO_NOT_SUBMIT if no condition is relevant to lumbar spine imaging.
+
+    Uses a broad ICD prefix set (union of Aetna + Cigna coverage patterns
+    plus common clinical red-flag codes). If the chart contains ONLY
+    unrelated diagnoses (e.g. J02.0 strep pharyngitis) with zero lumbar/
+    spine codes AND zero red-flag candidates, the request should not be
+    submitted at all.
+    """
+    has_relevant = any(
+        any(cond.code.startswith(pfx) for pfx in _LUMBAR_MRI_RELEVANT_ICD_PREFIXES)
+        for cond in context.active_conditions
+    )
+    if has_relevant or context.red_flag_candidates:
+        return None
+
+    condition_summary = (
+        ", ".join(f"{c.code} {c.display}" for c in context.active_conditions)
+        or "no active conditions"
+    )
+    return CriteriaResult(
+        decision=Decision.DO_NOT_SUBMIT,
+        payer_id=context.coverage.payer_id,
+        service_cpt=context.service_request.cpt_code,
+        criteria_missing=[
+            CriterionCheck(
+                id="system.chart_mismatch",
+                description=(
+                    "Chart must contain at least one lumbar/spine-related "
+                    "diagnosis or red-flag finding"
+                ),
+                met=False,
+                evidence=(
+                    f"Active conditions: {condition_summary}. "
+                    "None match lumbar spine ICD prefixes and no "
+                    "red-flag candidates were detected."
+                ),
+                source_document="Condition",
+            )
+        ],
+        confidence=1.0,
+        reasoning_trace=(
+            "Do not submit: the chart does not contain any lumbar or "
+            "spine-related diagnoses, and no red-flag findings were "
+            f"detected. Documented conditions: {condition_summary}."
+        ),
+    )
 
 
 def _check_service_applicable(criteria: PayerCriteria, service_code: str) -> bool:
@@ -81,12 +148,16 @@ def _check_red_flags(
                 f"{c.label} (source: {c.source}, evidence: {c.evidence})"
                 for c in matching_candidates
             ]
+            source_docs = [f"RedFlagCandidate/{c.label}" for c in matching_candidates]
+            snippet_parts = [c.evidence for c in matching_candidates if c.evidence]
             checks.append(
                 CriterionCheck(
                     id=rf.id,
                     description=rf.label,
                     met=True,
                     evidence="; ".join(evidence_parts),
+                    source_document="; ".join(source_docs),
+                    snippet="; ".join(snippet_parts) if snippet_parts else None,
                 )
             )
 
@@ -300,6 +371,39 @@ async def _gemini_evaluate(
 
 
 # ---------------------------------------------------------------------------
+# Audit-metadata helpers
+# ---------------------------------------------------------------------------
+
+
+def _evidence_sources(context: PatientContext) -> list[str]:
+    """List FHIR resource types that contributed data to this evaluation."""
+    sources = ["Patient", "Condition", "Coverage", "ServiceRequest"]
+    if context.conservative_therapy_trials:
+        sources.append("Procedure/MedicationRequest")
+    if context.prior_imaging:
+        sources.append("DiagnosticReport")
+    if context.red_flag_candidates:
+        sources.append("RedFlagCandidate")
+    if context.clinical_notes_excerpt:
+        sources.append("DocumentReference")
+    return sources
+
+
+def _stamp_audit(
+    result: CriteriaResult,
+    eval_start: datetime,
+    policy_tag: str,
+    context: PatientContext,
+) -> CriteriaResult:
+    """Populate audit metadata on any CriteriaResult before returning."""
+    result.evaluated_at = eval_start.isoformat()
+    result.policy_version_tag = policy_tag
+    result.evidence_sources_used = _evidence_sources(context)
+    result.review_status = "pending_human_review"
+    return result
+
+
+# ---------------------------------------------------------------------------
 # MCP tool entry point
 # ---------------------------------------------------------------------------
 
@@ -335,8 +439,19 @@ async def match_payer_criteria(
     ctx: McpContext,
 ) -> CriteriaResult:
     """Evaluate a patient against payer medical-necessity criteria."""
+    eval_start = datetime.now(UTC)
     context = PatientContext.model_validate_json(patient_context_json)
     payer_id = payer_id.strip()
+
+    mismatch = _check_chart_mismatch(context)
+    if mismatch is not None:
+        logger.info(
+            "match_payer_criteria chart_mismatch patient=%s",
+            context.demographics.patient_id,
+        )
+        mismatch.evaluated_at = eval_start.isoformat()
+        mismatch.evidence_sources_used = _evidence_sources(context)
+        return mismatch
 
     if not payer_id or payer_id not in _REGISTERED_PAYERS:
         logger.info(
@@ -344,9 +459,13 @@ async def match_payer_criteria(
             context.demographics.patient_id,
             payer_id,
         )
-        return _unknown_payer_criteria_result(context, service_code, payer_id)
+        result = _unknown_payer_criteria_result(context, service_code, payer_id)
+        result.evaluated_at = eval_start.isoformat()
+        result.evidence_sources_used = _evidence_sources(context)
+        return result
 
     criteria = load_payer_criteria(payer_id)
+    policy_tag = f"{payer_id}_lumbar_mri.{criteria.policy_version}"
 
     logger.info(
         "match_payer_criteria payer=%s service=%s patient=%s",
@@ -356,43 +475,53 @@ async def match_payer_criteria(
     )
 
     if not _check_service_applicable(criteria, service_code):
-        return CriteriaResult(
-            decision=Decision.DENY,
-            payer_id=payer_id,
-            service_cpt=service_code,
-            criteria_missing=[
-                CriterionCheck(
-                    id=f"{payer_id}.service_not_covered",
-                    description="Service CPT code not covered by this policy",
-                    met=False,
-                    evidence=f"CPT {service_code} not in {criteria.service.cpt_codes}",
-                )
-            ],
-            confidence=1.0,
-            reasoning_trace=(
-                f"CPT {service_code} is not covered under {criteria.policy_title}. "
-                f"Covered codes: {criteria.service.cpt_codes}."
+        return _stamp_audit(
+            CriteriaResult(
+                decision=Decision.DENY,
+                payer_id=payer_id,
+                service_cpt=service_code,
+                criteria_missing=[
+                    CriterionCheck(
+                        id=f"{payer_id}.service_not_covered",
+                        description="Service CPT code not covered by this policy",
+                        met=False,
+                        evidence=f"CPT {service_code} not in {criteria.service.cpt_codes}",
+                    )
+                ],
+                confidence=1.0,
+                reasoning_trace=(
+                    f"CPT {service_code} is not covered under {criteria.policy_title}. "
+                    f"Covered codes: {criteria.service.cpt_codes}."
+                ),
+                source_policy_url=criteria.source_policy_url,
             ),
-            source_policy_url=criteria.source_policy_url,
+            eval_start,
+            policy_tag,
+            context,
         )
 
     is_fast_track, rf_reason, rf_checks = _check_red_flags(context, criteria)
     if is_fast_track:
         assert rf_reason is not None
-        return CriteriaResult(
-            decision=Decision.APPROVE,
-            payer_id=payer_id,
-            service_cpt=service_code,
-            criteria_met=rf_checks,
-            red_flag_fast_track=True,
-            red_flag_reason=rf_reason,
-            confidence=1.0,
-            reasoning_trace=(
-                f"Red-flag fast-track applied. {rf_reason}. "
-                f"Conservative therapy requirements bypassed per "
-                f"{criteria.policy_title}."
+        return _stamp_audit(
+            CriteriaResult(
+                decision=Decision.APPROVE,
+                payer_id=payer_id,
+                service_cpt=service_code,
+                criteria_met=rf_checks,
+                red_flag_fast_track=True,
+                red_flag_reason=rf_reason,
+                confidence=1.0,
+                reasoning_trace=(
+                    f"Red-flag fast-track applied. {rf_reason}. "
+                    f"Conservative therapy requirements bypassed per "
+                    f"{criteria.policy_title}."
+                ),
+                source_policy_url=criteria.source_policy_url,
             ),
-            source_policy_url=criteria.source_policy_url,
+            eval_start,
+            policy_tag,
+            context,
         )
 
     pathway = _select_pathway(context, criteria)
@@ -407,4 +536,4 @@ async def match_payer_criteria(
     result.red_flag_reason = None
     result.source_policy_url = criteria.source_policy_url
 
-    return result
+    return _stamp_audit(result, eval_start, policy_tag, context)
