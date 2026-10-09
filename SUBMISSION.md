@@ -1,96 +1,75 @@
-# PriorAuth Preflight — Devpost Submission Draft
+# PriorAuth Preflight — Devpost Submission
 
-## Tagline
-
-Most PA agents generate packets. PriorAuth Preflight decides whether a lumbar
-MRI packet should be generated at all — then fixes missing documentation first.
-
----
+**Demo video:** [Prior Auth - Agents Assemble](https://www.youtube.com/watch?v=pBmYClgg194)
 
 ## Inspiration
 
-Physicians spend 13 hours per week on prior authorization. 94% of clinicians
-report care delays caused by the PA process. The problem isn't generating
-paperwork faster — it's submitting paperwork that's doomed to be denied because
-the chart doesn't support the request yet.
+Prior authorization is one of the most frustrating workflows in healthcare. A provider may order an MRI, medication, or procedure, but care can be delayed because the payer needs specific documentation before approving it. Many tools try to solve this by generating prior authorization letters faster. We took a different approach.
 
-We built PriorAuth Preflight to prevent avoidable denials before submission,
-not just automate the submission itself.
+For outpatient lumbar spine MRI prior authorizations, the bigger problem is often not the letter itself. It is that the chart may not be ready for submission. If key documentation is missing, the request can become a denial, creating more rework for staff and more delay for the patient.
+
+That inspired us to build **PriorAuth Preflight**, a denial-prevention agent that checks whether a lumbar MRI request should be submitted before a letter is generated.
 
 ## What it does
 
-PriorAuth Preflight is a denial-prevention agent for outpatient lumbar MRI
-(CPT 72148) that runs inside a Prompt Opinion workspace. When a clinician
-requests a prior authorization preflight, the agent:
+PriorAuth Preflight evaluates a patient's FHIR-style chart against payer-specific lumbar spine MRI criteria from Cigna and Aetna.
 
-1. **Pulls patient context** from the workspace FHIR server (demographics,
-   conditions, medications, procedures, clinical notes).
-2. **Evaluates payer criteria** (Cigna/eviCore and Aetna) using a deterministic
-   rule engine plus a Gemini reasoning pass on free-text notes.
-3. **Returns one of four outcomes:**
-   - **APPROVED** — chart supports the request; here's a ready-to-submit letter
-     with an evidence-backed criteria trace and audit metadata.
-   - **NEEDS ADDITIONAL INFORMATION** — chart is close but gaps exist; here's
-     exactly which criteria are unmet, with evidence snippets citing the chart,
-     plus a clinician-ready gap-fix template (fill-in-the-blank addendum) to
-     close the gaps.
-   - **DO NOT SUBMIT** — chart-procedure mismatch detected (e.g., sore-throat
-     chart + lumbar MRI order); a safety gate that stops guaranteed denials.
-   - **RED FLAG FAST-TRACK** — clinical urgency (cauda equina, malignancy)
-     detected from unstructured notes; criteria bypassed, urgent submission.
+The agent routes each request into one of four outcomes:
+
+1. **DO NOT SUBMIT** — used when the chart does not support the requested lumbar MRI, such as a chart-procedure mismatch.
+2. **NEEDS ADDITIONAL INFORMATION** — used when the patient has some relevant evidence, but key payer-required documentation is missing.
+3. **READY FOR HUMAN REVIEW** — used when the chart appears to support submission and the case is ready for clinician or prior authorization specialist review.
+4. **RED FLAG FAST-TRACK** — used when urgent red-flag findings, such as cauda equina indicators or malignancy-related concerns, support bypassing standard conservative therapy requirements.
+
+When the chart is incomplete, the system does not blindly generate a letter. Instead, it surfaces the exact evidence gap and generates a clinician-facing documentation template so the care team knows what to fix before payer review.
 
 ## How we built it
 
-- **One Python monorepo, two deployables**: a Google ADK A2A agent
-  (orchestrator + sub-agents) and a FastMCP server (3 tools), both deployed to
-  Fly.io.
-- **LLM**: Gemini 3.1 Flash Lite via Google AI Studio (free tier, temperature 0
-  for all clinical decisions).
-- **FHIR**: Prompt Opinion's workspace FHIR server with SHARP token
-  propagation — no separate auth needed.
-- **Payer criteria**: Cigna/eviCore V1.0.2026 and Aetna CPB 0236, paraphrased
-  from public policy documents with source URLs cited inline in versioned JSON.
-- **Team**: two people, both using Cursor with Claude Opus 4.7, coordinating
-  via committed convention files (AGENTS.md, STATUS.md, shared/ contracts).
+We built the project using an A2A agent coordinated through Prompt Opinion and a FastMCP server that performs the payer criteria evaluation.
+
+- The **A2A agent** coordinates the workflow and communicates with the user.
+- The **MCP server** evaluates patient chart evidence against payer criteria.
+- **Gemini** is used for reasoning and generation where natural language interpretation or documentation generation is needed.
+- **FHIR-style patient context** represents patient conditions, conservative therapy history, red-flag findings, and documentation evidence.
+- The output is a human-reviewable readiness artifact, not an autonomous approval or submission.
+
+The key design choice was to treat prior authorization as a preflight workflow. The system first asks: "Should this request be submitted at all?" Only after the chart supports the request does it move toward authorization justification.
 
 ## What makes it different
 
-| Feature | Most PA agents | PriorAuth Preflight |
-|---|---|---|
-| Output | Approve/deny packet | 4-tier: approve, needs-info, do-not-submit, red-flag |
-| Missing documentation | "Denied — incomplete" | Gap-fix template: fill-in-the-blank addendum |
-| Chart-procedure mismatch | Generates anyway | Safety gate: DO NOT SUBMIT |
-| Evidence trail | "Criteria met" | Per-criterion snippet + source document reference |
-| Clinical notes | Ignored or summarized | Red-flag detection from free text (cauda equina) |
-| Agent architecture | Single monolithic agent | 3 visible sub-agents with ADK-traced handoffs |
+Many prior authorization tools focus on generating packets, scoring approval likelihood, or drafting appeal letters. PriorAuth Preflight focuses on the step before submission. It is designed to:
 
-**Key differentiators:**
+- Detect chart-procedure mismatches
+- Identify missing conservative therapy documentation
+- Recognize urgent red-flag pathways
+- Generate clinician-ready gap-fix templates
+- Preserve a human-review workflow
+- Avoid auto-submission or auto-approval
 
-1. **Needs-info feedback loop** — returns a specific, actionable missing-evidence
-   checklist tied to cited payer criteria, plus a clinician-ready template.
-2. **DO NOT SUBMIT safety gate** — prevents guaranteed denials when the chart
-   doesn't match the requested procedure.
-3. **Red-flag fast-track** — detects clinical urgency from unstructured notes
-   (saddle anesthesia, bowel/bladder dysfunction) and bypasses normal criteria.
-4. **Evidence snippets with source citations** — every criterion check cites
-   the specific FHIR resource and chart text that supports or refutes it.
+This makes the system safer and more practical for real healthcare environments.
 
-## Impact
+## Challenges we faced
 
-- **Time**: 20+ minutes of manual prior-auth review → under 30 seconds.
-- **Denials prevented**: DO NOT SUBMIT gate catches chart-procedure mismatches
-  before they become denials. Gap-fix templates let clinicians close
-  documentation gaps before submission.
-- **Clinical safety**: Red-flag fast-track surfaces cauda equina and malignancy
-  from free-text notes, ensuring urgent cases aren't delayed by normal PA
-  timelines.
+One major challenge was scope. Prior authorization is a huge space, so we intentionally narrowed the project to one high-friction workflow: **outpatient lumbar spine MRI, CPT 72148**.
+
+Another challenge was differentiating our project from generic prior authorization agents. We solved this by focusing on denial prevention and readiness review instead of simple letter generation.
+
+We also had to balance automation with safety. Healthcare workflows require traceability and human oversight, so our system does not make final payer decisions. Every output is framed as a readiness review for a clinician or prior authorization specialist.
+
+Finally, we had to make the agent fast and reliable enough for a live demo. We moved key eligibility checks into deterministic MCP logic and used AI for interpretation and documentation generation where it adds the most value.
+
+## What we learned
+
+The most valuable healthcare AI systems are not always the ones that generate more text. Sometimes the highest-impact system is the one that prevents the wrong workflow from happening in the first place.
+
+For prior authorization, that means stopping unsupported requests before they become denials, showing exactly what is missing, and helping the care team fix the chart before payer review.
+
+## What's next
+
+PriorAuth Preflight could expand beyond lumbar MRI to other high-volume authorization workflows, such as CT imaging, orthopedic procedures, specialty medications, or physical therapy authorizations.
+
+The same framework can scale by adding new payer policies, procedure-specific criteria, and FHIR mappings while preserving the same human-reviewed preflight model.
 
 ## Built with
 
-Python 3.11, Google ADK, FastMCP, Gemini 3.1 Flash Lite, Prompt Opinion
-(A2A + MCP + FHIR), Fly.io, Pydantic, httpx, uv.
-
-## Marketplace links
-
-- **A2A Agent**: [PriorAuth Preflight — Lumbar MRI](TBD)
-- **MCP Toolkit**: [PriorAuth Toolkit](TBD)
+Python 3.11, Google ADK, FastMCP, Gemini 3.1 Flash Lite, Prompt Opinion (A2A + MCP + FHIR), Fly.io, Pydantic, httpx, uv.
