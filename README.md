@@ -6,18 +6,20 @@ Checks whether a lumbar MRI prior authorization will be approved before a clinic
 
 Built for the [Agents Assemble](https://agents-assemble.devpost.com/) hackathon on the [Prompt Opinion](https://app.promptopinion.ai/) healthcare agent platform.
 
+**[Watch the demo on YouTube](https://www.youtube.com/watch?v=pBmYClgg194)**
+
 ## What it does
 
 Most prior-authorization tools generate a packet and hope it is approved. PriorAuth Preflight reads the patient's FHIR chart, checks it against Cigna/eviCore and Aetna criteria for outpatient lumbar MRI (CPT 72148), and returns one of four outcomes:
 
 | Outcome | When | What the clinician gets |
 |---|---|---|
-| **Approve** | The chart meets every criterion | A ready-to-submit letter with a per-criterion evidence trace |
+| **Ready for human review** | The chart meets every criterion | A ready-to-submit letter with a per-criterion evidence trace |
 | **Needs info** | The chart is close but has gaps | The unmet criteria, chart evidence for each, and a fill-in-the-blank addendum to close the gaps |
 | **Do not submit** | The chart does not match the procedure | A safety stop before a guaranteed denial |
 | **Red-flag fast-track** | Free-text notes show urgency, such as cauda equina or malignancy | An urgent request that bypasses the normal criteria |
 
-Clinical decisions use a deterministic rule engine first, then a Gemini pass over free-text notes at temperature 0. Every criterion cites the FHIR resource and chart text it relied on.
+Clinical decisions use a deterministic rule engine first, then a Gemini pass over free-text notes at temperature 0. Every criterion cites the FHIR resource and chart text it relied on. The agent never submits or approves on its own: every result starts as pending human review.
 
 ## Architecture
 
@@ -68,7 +70,7 @@ Two developers, each pairing with an AI coding agent in Cursor. The agents coord
 - **Sanjit Saji** ([@Sanjit2004](https://github.com/Sanjit2004)): A2A agent and orchestration, FHIR token handling, demo patients, deployment
 - **Kevin Shine George** ([@kevinsgeo](https://github.com/kevinsgeo)): MCP server, payer criteria engine, letter generation
 
-The Devpost write-up draft is in [`SUBMISSION.md`](SUBMISSION.md).
+The Devpost write-up is in [`SUBMISSION.md`](SUBMISSION.md).
 
 ## License
 
