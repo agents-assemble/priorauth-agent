@@ -1,29 +1,3 @@
 # Code owners for PR review enforcement on GitHub.
-# Order matters — last matching rule wins for a given path.
 
-# Default fallback: any change needs either human to approve.
-*                                   @kevinsgeo
-
-# MCP server owned by Person A (Kevin); Person B still reviews.
-/mcp_server/                        @kevinsgeo
-
-# A2A agent owned by Person B (Sanjit).
-/a2a_agent/                         @Sanjit2004
-
-# Shared contracts: BOTH must approve.
-/shared/                            @kevinsgeo @Sanjit2004
-
-# Team brain: BOTH must approve.
-/AGENTS.md                          @kevinsgeo @Sanjit2004
-/.cursor/rules/                     @kevinsgeo @Sanjit2004
-/docs/PLAN.md                       @kevinsgeo @Sanjit2004
-
-# Infra: BOTH must approve (deploy config + CI).
-/mcp_server/fly.toml                @kevinsgeo @Sanjit2004
-/a2a_agent/fly.toml                 @kevinsgeo @Sanjit2004
-/.github/workflows/                 @kevinsgeo @Sanjit2004
-/docker-compose.yml                 @kevinsgeo @Sanjit2004
-/CODEOWNERS                         @kevinsgeo @Sanjit2004
-
-# Demo assets: either reviews.
-/demo/                              @kevinsgeo @Sanjit2004
+*                                   @Sanjit2004

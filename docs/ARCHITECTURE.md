@@ -48,12 +48,12 @@ We publish both the A2A agent AND the MCP toolkit to PO's Marketplace Studio for
 
 ### ADR-005 — `shared/` is the single source of truth for cross-service types
 
-Pydantic models (`PatientContext`, `CriteriaResult`, `PALetter`) live in `shared/models.py`. Both `mcp_server/` and `a2a_agent/` import from there. This is enforced by `CODEOWNERS` (both humans must approve any `shared/` change) and by a Cursor rule (`shared-contracts.md`). This prevents the #1 failure mode of two-agent-driven collab: both agents inventing slightly different schemas.
+Pydantic models (`PatientContext`, `CriteriaResult`, `PALetter`) live in `shared/models.py`. Both `mcp_server/` and `a2a_agent/` import from there. During the hackathon this was enforced by `CODEOWNERS` (both humans had to approve any `shared/` change) and by a Cursor rule (`shared-contracts.md`). This prevents the #1 failure mode of two-agent-driven collab: both agents inventing slightly different schemas.
 
 ### ADR-006 — Fly.io for production deployment, ngrok for local dev only
 
 Judges need persistent public HTTPS URLs to invoke our services during judging. ngrok URLs are unstable. Both deployables go to Fly.io by end of Week 2; ngrok URLs are swapped out of PO workspace at that point and must never appear in production config.
 
-### ADR-007 — 3 demo patients cover happy path, needs-info, red-flag
+### ADR-007 — 4 demo patients cover happy path, needs-info, red-flag, do-not-submit
 
-Patient A = textbook approval, Patient B = needs-info (no PT documented), Patient C = cauda equina red-flag fast-track. The three cases together are the core of the demo video. Clinical notes for Patient C are hand-authored (not Synthea-generated) to ensure realistic narrative content for the LLM red-flag detection pass.
+Patient A = textbook approval, Patient B = needs-info (no PT documented), Patient C = cauda equina red-flag fast-track, Patient D = chart-procedure mismatch (do not submit). Together they are the core of the demo video. Clinical notes for Patient C are hand-authored (not Synthea-generated) to ensure realistic narrative content for the LLM red-flag detection pass.
