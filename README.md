@@ -1,6 +1,6 @@
 # PriorAuth Preflight
 
-Checks whether a lumbar MRI prior authorization will be approved before a clinician submits it, and says exactly what is missing if it will not.
+Checks whether a lumbar MRI prior authorization request is ready to submit before a clinician sends it, and says exactly what is missing if it is not.
 
 [![CI](https://github.com/agents-assemble/priorauth-agent/actions/workflows/ci.yml/badge.svg)](https://github.com/agents-assemble/priorauth-agent/actions/workflows/ci.yml)
 
@@ -21,19 +21,42 @@ Most prior-authorization tools generate a packet and hope it is approved. PriorA
 
 Clinical decisions use a deterministic rule engine first, then a Gemini pass over free-text notes at temperature 0. Every criterion cites the FHIR resource and chart text it relied on. The agent never submits or approves on its own: every result starts as pending human review.
 
+## Demo patients
+
+Four synthetic patients in [`demo/patients/`](demo/patients/) cover each outcome. The outcomes are asserted in [`tests/mcp_server/test_match_payer_criteria.py`](tests/mcp_server/test_match_payer_criteria.py).
+
+| Patient | Chart | Outcome | Checked by |
+|---|---|---|---|
+| A | 47F, low back pain with radiculopathy, 8 PT sessions, NSAID and muscle-relaxant trials | Ready for human review (Cigna and Aetna) | Live Gemini tests |
+| B | 52M, low back pain, NSAID trial, a single PT visit | Needs info: not enough documented therapy | Live Gemini tests |
+| C | 61F, history of cancer, urinary retention and incontinence in the chart | Red-flag fast-track | Offline tests in CI |
+| D | 35F, pharyngitis and hypertension, lumbar MRI ordered with no back diagnosis | Do not submit: chart-procedure mismatch | Offline tests in CI |
+
 ## Architecture
 
-```
-Prompt Opinion workspace
-├── Clinician ↔ General User Agent ↔ (A2A + FHIR token) ↔ PriorAuth Preflight A2A agent
-│                                                            ↓
-│                                      Orchestrator → {PatientContext, CriteriaEvaluator, PALetter} sub-agents
-│                                                            ↓
-│                                                      PriorAuth Toolkit MCP server ↔ Workspace FHIR
-└── Gemini 3.1 Flash Lite (shared LLM)
+```mermaid
+flowchart LR
+    clinician[Clinician] --> gua[Prompt Opinion<br/>General User Agent]
+    gua -- "A2A + FHIR token" --> orch
+
+    subgraph agent["A2A agent · Google ADK · Fly.io"]
+        orch[Orchestrator] --> pc[PatientContext]
+        orch --> ce[CriteriaEvaluator]
+        orch --> pl[PALetter]
+    end
+
+    subgraph mcp["MCP server · FastMCP · Fly.io"]
+        tools[6 tools] --> rules[Deterministic<br/>criteria rules]
+        tools --> llm[Gemini]
+    end
+
+    pc --> tools
+    ce --> tools
+    pl --> tools
+    tools --> fhir[(Workspace FHIR)]
 ```
 
-Two services, one Python monorepo, both deployed to Fly.io:
+Two services, one Python monorepo, both deployed to Fly.io. The agent scales to zero when idle, so the first request after a quiet period takes about 10 seconds.
 
 | Path | Purpose | Lead |
 |---|---|---|
@@ -42,7 +65,14 @@ Two services, one Python monorepo, both deployed to Fly.io:
 | [`shared/`](shared/) | Pydantic contracts used by both services | Both |
 | [`demo/`](demo/) | Four synthetic FHIR patients and hand-written clinical notes | Both |
 
-Design decisions are recorded in [`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md). The original plan is in [`docs/PLAN.md`](docs/PLAN.md).
+## Design decisions
+
+- **Rules before the model.** Chart-procedure mismatch and red flags coded in the chart are checked deterministically, so Patients C and D never reach Gemini. The model reads free-text notes and judges criteria that need interpretation, at temperature 0.
+- **Every claim has a source.** Each criterion result cites the FHIR resource and the chart text it relied on, so a reviewer can check the agent's work.
+- **A human signs off.** Results start as `pending_human_review`, and nothing in the code changes that status.
+- **One contract for both services.** The Pydantic models in [`shared/`](shared/) are the only definition of patient context, criteria results and letters, so the agent and the MCP server can't drift apart.
+
+The full decision records are in [`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md). [`docs/README.md`](docs/README.md) indexes the rest of the docs.
 
 ## Run it locally
 
@@ -55,11 +85,15 @@ uv sync --all-packages
 cp .env.example .env   # set GOOGLE_API_KEY and the other values listed in the file
 
 make dev               # MCP server on :8000 and A2A agent on :8001
-make check             # lint, typecheck, fast tests
-make integration       # end-to-end run against the demo patients
+make check             # ruff, mypy, and the offline test suite
+uv run pytest -m llm   # tests that call Gemini; needs GOOGLE_API_KEY
 ```
 
 To register both services in a Prompt Opinion workspace from one machine, follow [`docs/LOCAL_DEV_ONE_MACHINE.md`](docs/LOCAL_DEV_ONE_MACHINE.md).
+
+## Testing
+
+205 tests. CI runs the 199 offline tests on every pull request, along with ruff lint, ruff format and mypy in strict mode. These cover FHIR extraction for each demo bundle, the criteria rules, letter structure and the agent's orchestration. The other 6 tests send Patients A and B through the real Gemini model and check the outcome. They run locally with an API key.
 
 ## How we worked
 

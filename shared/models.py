@@ -2,9 +2,7 @@
 
 These are the single source of truth for cross-service types. Both
 `mcp_server/` and `a2a_agent/` import from this module. Do not duplicate
-these types elsewhere.
-
-Any change here must be reviewed by BOTH humans per CODEOWNERS.
+these types elsewhere. A change here affects both services.
 """
 
 from __future__ import annotations
