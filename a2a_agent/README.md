@@ -2,7 +2,7 @@
 
 Google ADK A2A agent — our Devpost submission deliverable.
 
-**Owner**: Person B (Sanjit). Person A reviews PRs but does not drive.
+**Owner**: Sanjit Saji ([@Sanjit2004](https://github.com/Sanjit2004)). Kevin Shine George ([@kevinsgeo](https://github.com/kevinsgeo)) reviews PRs.
 
 Bootstrapped from the [Prompt Opinion Google-ADK reference](https://github.com/prompt-opinion/po-adk-python). See [`REFERENCE.md`](REFERENCE.md) for what we copied, what we changed, and the upstream-sync workflow.
 
@@ -10,7 +10,7 @@ Bootstrapped from the [Prompt Opinion Google-ADK reference](https://github.com/p
 
 **PriorAuth Preflight — Lumbar MRI.** Receives A2A calls from Prompt Opinion (with a SHARP-propagated FHIR token in message metadata), orchestrates internal sub-agents, and performs denial-prevention preflight: chart-procedure mismatch detection (DO NOT SUBMIT safety gate), missing-documentation identification with clinician gap-fix templates, red-flag fast-track, and ready-to-submit PA letter generation.
 
-## Sub-agents (Week 2 — not in the spike yet)
+## Sub-agents
 
 1. **Patient Context** — bound to MCP tool `fetch_patient_context`. Clinical data retrieval.
 2. **Criteria Evaluator** — bound to MCP tool `match_payer_criteria`. Decides approve / needs-info / deny; flags red flags.

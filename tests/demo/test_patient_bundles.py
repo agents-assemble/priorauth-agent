@@ -26,10 +26,12 @@ tests of the demo fixtures.
 from __future__ import annotations
 
 import json
+from datetime import date
 from pathlib import Path
-from typing import Any
+from typing import Any, Self
 
 import pytest
+from mcp_server.fhir import extractors
 from mcp_server.fhir.extractors import (
     detect_redflags_from_conditions,
     extract_conditions,
@@ -43,6 +45,22 @@ from mcp_server.fhir.extractors import (
 
 REPO_ROOT = Path(__file__).resolve().parents[2]
 BUNDLES_DIR = REPO_ROOT / "demo" / "patients"
+
+# Ages in these bundles are tuned to the demo encounter date, so the
+# extractors' clock is pinned to it; otherwise the age assertions drift
+# as real birthdays pass.
+DEMO_ENCOUNTER_DATE = date(2026, 4, 15)
+
+
+class _DemoDate(date):
+    @classmethod
+    def today(cls) -> Self:
+        return cls(DEMO_ENCOUNTER_DATE.year, DEMO_ENCOUNTER_DATE.month, DEMO_ENCOUNTER_DATE.day)
+
+
+@pytest.fixture(autouse=True)
+def _pin_today_to_demo_encounter(monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setattr(extractors, "date", _DemoDate)
 
 
 # ---------------------------------------------------------------------------
@@ -120,11 +138,7 @@ def test_patient_a_bundle_happy_path_full_therapy_history_no_redflags() -> None:
     demographics = extract_demographics(_first(bundle, "Patient"))
     assert demographics.patient_id == "demo-patient-a"
     assert demographics.sex == "female"
-    assert demographics.age == 47, (
-        "Patient A's DOB 1978-11-03 is tuned to yield exactly 47 at the "
-        "2026-04-15 encounter AND at test-run time. If this fails and the "
-        "year is 2027+, bump the DOB rather than relaxing the assertion."
-    )
+    assert demographics.age == 47, "Patient A's DOB 1978-11-03 is 47 at the 2026-04-15 encounter."
 
     conditions = extract_conditions(_resources(bundle, "Condition"))
     assert {c.code for c in conditions} == {"M54.50", "M54.16"}, (
@@ -296,7 +310,7 @@ def test_patient_d_bundle_chart_mismatch_no_spine_diagnoses() -> None:
     demographics = extract_demographics(_first(bundle, "Patient"))
     assert demographics.patient_id == "demo-patient-d"
     assert demographics.sex == "female"
-    assert demographics.age in {35, 36}  # DOB 1990-06-12
+    assert demographics.age == 35  # DOB 1990-06-12
 
     conditions = extract_conditions(_resources(bundle, "Condition"))
     codes = {c.code for c in conditions}
